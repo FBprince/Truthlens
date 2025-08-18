@@ -3,5 +3,5 @@ requests
 beautifulsoup4
 Pillow
 numpy
-opencv
+opencv-python-headless
 
