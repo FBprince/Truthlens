@@ -1000,23 +1000,17 @@
 
 
 
+# app_truthlens_online.py
+# =========================================================
+# TruthLens — CLIP Online Media Origin Heuristic (Image & Video)
+# Loads CLIP directly from Hugging Face every run (force/resume download).
+# Supports HF tokens via env var HF_TOKEN (optional for public models).
+# =========================================================
 
-
-
-
-
-
-# app_ai_detector.py
-# ================== FORCE DIRECT INTERNET (no proxy) ==================
 import os
-os.environ["HTTP_PROXY"] = ""
-os.environ["HTTPS_PROXY"] = ""
-os.environ["http_proxy"] = ""
-os.environ["https_proxy"] = ""
-
-# ================== IMPORTS ==================
 import io
 import time
+import math
 import tempfile
 import numpy as np
 import cv2
@@ -1024,33 +1018,27 @@ import requests
 import streamlit as st
 from PIL import Image
 import torch
+import torch.nn.functional as F
 import transformers
 from transformers import CLIPProcessor, CLIPModel
 
-# ================== CONFIG / THEME ==================
-st.set_page_config(page_title="TruthLens — Advanced Online AI Detector", layout="wide", page_icon="🤖")
-
-# Tech / advanced background + UI polish
+# ---------- STREAMLIT CONFIG / THEME ----------
+st.set_page_config(page_title="TruthLens — Online AI Detector", layout="wide", page_icon="🤖")
 st.markdown("""
 <style>
-/* Full-screen animated tech background */
 html, body, [data-testid="stAppViewContainer"] {
   background: radial-gradient(1200px 600px at 20% 10%, #0a0f1f 0%, #060913 35%, #04060d 60%, #02040a 100%) !important;
 }
 [data-testid="stAppViewContainer"]::before {
   content: "";
-  position: fixed;
-  inset: 0;
+  position: fixed; inset: 0;
   background:
-    linear-gradient(120deg, rgba(0,255,204,0.08), rgba(0,153,255,0.06)) ,
+    linear-gradient(120deg, rgba(0,255,204,0.08), rgba(0,153,255,0.06)),
     repeating-linear-gradient(0deg, rgba(255,255,255,0.03), rgba(255,255,255,0.03) 1px, transparent 1px, transparent 40px),
     repeating-linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.02) 1px, transparent 1px, transparent 40px);
-  pointer-events: none;
-  z-index: 0;
+  pointer-events: none; z-index: 0;
 }
-h1, h2, h3, h4, h5, h6, .stMetric, .stAlert, label, p, span, div {
-  color: #e8eefc !important;
-}
+h1, h2, h3, h4, h5, h6, .stMetric, .stAlert, label, p, span, div { color: #e8eefc !important; }
 .block-container { z-index: 1; }
 .neon-card {
   border-radius: 18px; padding: 18px 20px; margin: 8px 0;
@@ -1066,105 +1054,165 @@ button[kind="primary"] { background: linear-gradient(90deg,#00ffc8,#00a8ff) !imp
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🚀 TruthLens — Advanced Online AI Detector")
-st.markdown('<span class="neon-badge">Image + Video • Upload or URL • Online-only</span>', unsafe_allow_html=True)
-st.markdown('<div class="neon-card">Detect whether media is <b>AI-generated</b> or <b>Human-made</b>. Uses CLIP multi-prompt similarity for robust, accurate results.</div>', unsafe_allow_html=True)
+st.title("🚀 TruthLens — Online AI Detector (CLIP)")
+st.markdown('<span class="neon-badge">Images + Videos • URL or Upload • Always fetch CLIP online</span>', unsafe_allow_html=True)
+st.markdown('<div class="neon-card">Detect whether media is <b>AI-generated</b> or <b>Human-made</b> using CLIP multi-prompt similarity with online weights.</div>', unsafe_allow_html=True)
 
-# ================== MODEL (ONLINE-ONLY) ==================
-transformers.utils.hub.HF_HUB_DOWNLOAD_TIMEOUT = 600  # 10 min global HF download timeout
+# ---------- HUGGING FACE ONLINE SETTINGS ----------
+transformers.utils.hub.HF_HUB_DOWNLOAD_TIMEOUT = 600  # 10 minutes
+HF_REPO = "openai/clip-vit-base-patch32"
+
+# Optional: Respect existing proxy settings. If you need to hard-disable proxies, uncomment:
+# os.environ["HTTP_PROXY"] = ""
+# os.environ["HTTPS_PROXY"] = ""
+# os.environ["http_proxy"] = ""
+# os.environ["https_proxy"] = ""
+
+# Read token if present (for private rate limits or gated models, not required for CLIP)
+HF_TOKEN = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
+
+def _online_from_pretrained(repo_id: str, is_processor: bool = False):
+    """
+    Force online load with resume. Uses token if available. Retries with backoff.
+    """
+    max_retries = 3
+    backoff = 2.0
+    last_err = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            if is_processor:
+                return CLIPProcessor.from_pretrained(
+                    repo_id,
+                    token=HF_TOKEN,
+                    force_download=True,
+                    resume_download=True
+                )
+            else:
+                return CLIPModel.from_pretrained(
+                    repo_id,
+                    token=HF_TOKEN,
+                    force_download=True,
+                    resume_download=True
+                )
+        except Exception as e:
+            last_err = e
+            time.sleep(backoff)
+            backoff *= 2
+    raise last_err
 
 @st.cache_resource(show_spinner=True)
-def load_clip():
-    name = "openai/clip-vit-base-patch32"
-    model = CLIPModel.from_pretrained(name)
-    processor = CLIPProcessor.from_pretrained(name)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model.to(device)
-    model.eval()
+def load_clip_online():
+    with st.spinner("🔄 Fetching CLIP (openai/clip-vit-base-patch32) from Hugging Face…"):
+        model = _online_from_pretrained(HF_REPO, is_processor=False)
+        processor = _online_from_pretrained(HF_REPO, is_processor=True)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model.to(device).eval()
     return model, processor, device
 
-clip_model, clip_processor, device = load_clip()
+clip_model, clip_processor, device = load_clip_online()
 
-# ================== PROMPT ENSEMBLE (improves accuracy) ==================
+# ---------- PROMPT ENSEMBLE (AI vs Human clusters) ----------
 AI_TEXTS = [
     "an AI-generated image, synthetic, digital rendering",
     "a computer-generated picture created by an AI model",
-    "AI art, unreal, diffusion model output"
+    "AI art, unreal, diffusion model output",
+    "synthetic photo with smooth textures and perfect edges",
 ]
 HUMAN_TEXTS = [
     "a real photo taken by a camera",
     "a natural human-made photograph",
-    "an authentic, real-world image captured by a person"
+    "an authentic, real-world image captured by a person",
+    "photo with realistic depth of field and natural grain",
 ]
 
-@st.cache_resource
-def encode_texts():
-    # Pre-encode text features for speed and stability
+@st.cache_resource(show_spinner=False)
+def encode_texts_online():
     texts = AI_TEXTS + HUMAN_TEXTS
-    inputs = clip_processor(text=texts, return_tensors="pt", padding=True).to(device)
+    # Keep text encoding on CPU (fast enough) then normalize
+    inputs = clip_processor(text=texts, return_tensors="pt", padding=True)
     with torch.no_grad():
         feats = clip_model.get_text_features(**inputs)
-    # Normalize (CLIP best practice)
     feats = feats / feats.norm(p=2, dim=-1, keepdim=True)
     return feats, len(AI_TEXTS), len(HUMAN_TEXTS)
 
-TEXT_FEATS, N_AI, N_HUM = encode_texts()
+TEXT_FEATS, N_AI, N_HUM = encode_texts_online()
 
-# ================== INFERENCE HELPERS ==================
+# ---------- HELPERS ----------
+def load_image_from_url(url: str) -> Image.Image:
+    r = requests.get(url, timeout=60)
+    r.raise_for_status()
+    img = Image.open(io.BytesIO(r.content)).convert("RGB")
+    return img
+
+def download_video_from_url(url: str) -> str:
+    r = requests.get(url, timeout=120, stream=True)
+    r.raise_for_status()
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+    for chunk in r.iter_content(chunk_size=1024 * 1024):
+        if chunk:
+            tmp.write(chunk)
+    tmp.flush(); tmp.close()
+    return tmp.name
+
 def image_dims(img: Image.Image):
     return img.width, img.height
 
 def classify_image(img: Image.Image):
-    # Preprocess
-    inputs = clip_processor(images=img, return_tensors="pt").to(device)
+    # Use autocast for speed on GPU
+    inputs = clip_processor(images=img, return_tensors="pt")
+    for k in inputs:
+        inputs[k] = inputs[k].to(device)
+
     with torch.no_grad():
-        img_feats = clip_model.get_image_features(**inputs)
+        if device == "cuda":
+            with torch.cuda.amp.autocast():
+                img_feats = clip_model.get_image_features(**inputs)
+        else:
+            img_feats = clip_model.get_image_features(**inputs)
+
     img_feats = img_feats / img_feats.norm(p=2, dim=-1, keepdim=True)
+    logits = img_feats @ TEXT_FEATS.T  # [1, num_texts]
+    logits = logits.squeeze(0)
 
-    # Cosine similarity with pre-encoded text prompts
-    # logits shape: [1, num_texts]
-    logits = img_feats @ TEXT_FEATS.T
-    logits = logits.squeeze(0)  # [num_texts]
-
-    # Split AI vs Human prompts, average each group, softmax to probabilities
     ai_logit = logits[:N_AI].mean()
-    human_logit = logits[N_AI:N_AI+N_HUM].mean()
-    pair = torch.stack([ai_logit, human_logit], dim=0)
+    hm_logit = logits[N_AI:N_AI+N_HUM].mean()
+    pair = torch.stack([ai_logit, hm_logit], dim=0)
     probs = torch.softmax(pair, dim=0).detach().cpu().numpy()
-    return float(probs[0]), float(probs[1])  # (p_ai, p_human)
+    return float(probs[0]), float(probs[1])  # p_ai, p_human
 
 def classify_video(video_path: str, max_frames: int = 12):
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
-        raise RuntimeError("Could not open video.")
+        raise RuntimeError("Could not open video file.")
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
     fps = cap.get(cv2.CAP_PROP_FPS) or 0.0
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 0
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 0
 
-    # choose evenly spaced frames
-    indices = np.linspace(0, max(0, total_frames - 1), num=min(max_frames, max(1, total_frames))).astype(int)
-    ai_scores, human_scores = [], []
+    # Evenly spaced frame indices
+    n = min(max_frames, max(1, total_frames)) if total_frames else max_frames
+    indices = np.linspace(0, max(0, total_frames - 1), num=n).astype(int)
 
-    # Progress
+    ai_scores, human_scores = [], []
     prog = st.progress(0, text="Analyzing video frames…")
     for i, idx in enumerate(indices, start=1):
         cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx))
         ok, frame = cap.read()
         if not ok:
+            prog.progress(i / len(indices), text=f"Skipping unreadable frame {i}/{len(indices)}")
             continue
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         pil = Image.fromarray(frame_rgb)
         p_ai, p_h = classify_image(pil)
-        ai_scores.append(p_ai)
-        human_scores.append(p_h)
+        ai_scores.append(p_ai); human_scores.append(p_h)
         prog.progress(i / len(indices), text=f"Analyzing frame {i}/{len(indices)}")
 
     cap.release()
     p_ai = float(np.mean(ai_scores)) if ai_scores else 0.5
     p_h = float(np.mean(human_scores)) if human_scores else 0.5
     duration = (total_frames / fps) if (fps and total_frames) else 0.0
+
     return {
         "p_ai": p_ai,
         "p_h": p_h,
@@ -1175,28 +1223,12 @@ def classify_video(video_path: str, max_frames: int = 12):
         "duration": duration
     }
 
-def load_image_from_url(url: str) -> Image.Image:
-    r = requests.get(url, timeout=30)
-    r.raise_for_status()
-    return Image.open(io.BytesIO(r.content)).convert("RGB")
-
-def download_video_from_url(url: str) -> str:
-    r = requests.get(url, timeout=60, stream=True)
-    r.raise_for_status()
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-    for chunk in r.iter_content(chunk_size=1024 * 1024):
-        if chunk:
-            tmp.write(chunk)
-    tmp.flush(); tmp.close()
-    return tmp.name
-
 def verdict_label(p_ai: float, p_h: float):
     return "AI-generated" if p_ai >= p_h else "Human-made"
 
-# ================== TABS (URL FIRST) ==================
-tab_url, tab_upload = st.tabs(["🔗 Media URL", "📁 Upload Media"])
+# ---------- UI: TABS ----------
+tab_url, tab_upload = st.tabs(["🔗 Analyze via URL", "📁 Upload Media"])
 
-# ---------- URL TAB ----------
 with tab_url:
     st.subheader("Analyze Image or Video from URL")
     media_kind = st.radio("URL Type:", ["Image URL", "Video URL"], horizontal=True)
@@ -1211,11 +1243,13 @@ with tab_url:
                 label = verdict_label(p_ai, p_h)
 
                 st.image(img, caption=f"Loaded Image — {w}×{h}px", use_column_width=True)
-                st.markdown(f'<div class="neon-card"><b>Result:</b> {label}<br>'
-                            f'AI probability: {p_ai*100:.2f}% • Human probability: {p_h*100:.2f}%<br>'
-                            f'Dimensions: {w} × {h} px</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="neon-card"><b>Result:</b> {label}<br>'
+                    f'AI probability: {p_ai*100:.2f}% • Human probability: {p_h*100:.2f}%<br>'
+                    f'Dimensions: {w} × {h} px</div>', unsafe_allow_html=True
+                )
 
-            else:  # Video URL
+            else:
                 path = download_video_from_url(url)
                 st.video(path)
                 info = classify_video(path, max_frames=12)
@@ -1229,10 +1263,11 @@ with tab_url:
                     unsafe_allow_html=True
                 )
 
+        except requests.RequestException as e:
+            st.error(f"Network error while fetching media: {e}")
         except Exception as e:
             st.error(f"Failed to analyze URL: {e}")
 
-# ---------- UPLOAD TAB ----------
 with tab_upload:
     st.subheader("Upload Image or Video")
     media_type = st.radio("Upload Type:", ["Image", "Video"], horizontal=True)
@@ -1247,9 +1282,11 @@ with tab_upload:
                 label = verdict_label(p_ai, p_h)
 
                 st.image(img, caption=f"Uploaded Image — {w}×{h}px", use_column_width=True)
-                st.markdown(f'<div class="neon-card"><b>Result:</b> {label}<br>'
-                            f'AI probability: {p_ai*100:.2f}% • Human probability: {p_h*100:.2f}%<br>'
-                            f'Dimensions: {w} × {h} px</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="neon-card"><b>Result:</b> {label}<br>'
+                    f'AI probability: {p_ai*100:.2f}% • Human probability: {p_h*100:.2f}%<br>'
+                    f'Dimensions: {w} × {h} px</div>', unsafe_allow_html=True
+                )
 
             else:
                 tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
@@ -1269,5 +1306,10 @@ with tab_upload:
         except Exception as e:
             st.error(f"Failed to analyze file: {e}")
 
-# ================== FOOTER ==================
-st.markdown('<div class="neon-card">Tip: Higher confidence comes from clear images/videos. For videos, TruthLens samples multiple evenly-spaced frames and averages the predictions for robustness.</div>', unsafe_allow_html=True)
+# ---------- FOOTER ----------
+st.markdown('<div class="neon-card">Note: CLIP is a general vision-language model. This ensemble is a strong heuristic, not a proof. For critical use, combine with metadata checks and model-specific artifact detectors.</div>', unsafe_allow_html=True)
+
+
+
+
+
