@@ -1,7 +1,15 @@
+
 streamlit
 requests
 beautifulsoup4
-Pillow
-numpy
-opencv-python-headless
+lxml
 
+
+pillow
+opencv-python-headless
+numpy
+
+torch
+transformers
+huggingface-hub
+sentencepiece
