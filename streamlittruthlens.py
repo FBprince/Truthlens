@@ -999,358 +999,111 @@
 
 
 
-
-
-
-
-# app_truthlens_minimal_readout.py
-# =========================================================
-# TruthLens — CLIP Online Media Origin Heuristic (Image & Video)
-# - Always loads CLIP from Hugging Face (force/resume download).
-# - Accepts ANY upload (image or video) and ANY URL; auto-detects type.
-# - Shows only Width, Height, Resolution (no probabilities).
-# =========================================================
-
-import os
-import io
-import time
-import tempfile
-import mimetypes
-from urllib.parse import urlparse
-
-import numpy as np
-import cv2
-import requests
 import streamlit as st
-from PIL import Image, UnidentifiedImageError
+import requests
+import cv2
+import numpy as np
+from PIL import Image
+from moviepy.editor import VideoFileClip
+import tempfile
+import os
 
-import torch
-import torch.nn.functional as F
-import transformers
-from transformers import CLIPProcessor, CLIPModel
+# ==============================
+# Utility Functions
+# ==============================
+def analyze_image(img: Image.Image):
+    """Extract width, height, and resolution from image"""
+    width, height = img.size
+    resolution = f"{width}x{height}"
+    return width, height, resolution
 
-# ---------- STREAMLIT CONFIG / THEME ----------
-st.set_page_config(page_title="TruthLens — Online AI Detector", layout="wide", page_icon="🤖")
-st.markdown("""
-<style>
-html, body, [data-testid="stAppViewContainer"] {
-  background: radial-gradient(1200px 600px at 20% 10%, #0a0f1f 0%, #060913 35%, #04060d 60%, #02040a 100%) !important;
-}
-[data-testid="stAppViewContainer"]::before {
-  content: "";
-  position: fixed; inset: 0;
-  background:
-    linear-gradient(120deg, rgba(0,255,204,0.08), rgba(0,153,255,0.06)),
-    repeating-linear-gradient(0deg, rgba(255,255,255,0.03), rgba(255,255,255,0.03) 1px, transparent 1px, transparent 40px),
-    repeating-linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.02) 1px, transparent 1px, transparent 40px);
-  pointer-events: none; z-index: 0;
-}
-h1, h2, h3, h4, h5, h6, .stMetric, .stAlert, label, p, span, div { color: #e8eefc !important; }
-.block-container { z-index: 1; }
-.neon-card {
-  border-radius: 18px; padding: 18px 20px; margin: 8px 0;
-  background: rgba(10,16,30,0.65);
-  box-shadow: 0 0 0 1px rgba(0,255,204,0.12), 0 10px 30px rgba(0,0,0,0.45);
-}
-.neon-badge {
-  display: inline-block; padding: 4px 10px; border-radius: 999px;
-  background: linear-gradient(90deg, #00ffc8 0%, #00a8ff 100%);
-  color: #06121f !important; font-weight: 700; letter-spacing: .3px;
-}
-button[kind="primary"] { background: linear-gradient(90deg,#00ffc8,#00a8ff) !important; color:#06121f !important; font-weight:700; }
-</style>
-""", unsafe_allow_html=True)
-
-st.title("🚀 TruthLens — Online AI Detector (CLIP)")
-st.markdown('<span class="neon-badge">Images + Videos • URL or Upload • Only shows dimensions</span>', unsafe_allow_html=True)
-st.markdown('<div class="neon-card">Detect whether media is <b>AI-generated</b> or <b>Human-made</b> with a robust CLIP ensemble. Output shows only <b>Width</b>, <b>Height</b>, and <b>Resolution</b>.</div>', unsafe_allow_html=True)
-
-# ---------- HUGGING FACE ONLINE SETTINGS ----------
-transformers.utils.hub.HF_HUB_DOWNLOAD_TIMEOUT = 600  # 10 minutes
-HF_REPO = "openai/clip-vit-base-patch32"
-HF_TOKEN = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
-
-def _online_from_pretrained(repo_id: str, is_processor: bool = False):
-    """Force online load with resume; retries with backoff; uses HF token if provided."""
-    max_retries = 3
-    backoff = 2.0
-    last_err = None
-    for _ in range(max_retries):
-        try:
-            if is_processor:
-                return CLIPProcessor.from_pretrained(
-                    repo_id, token=HF_TOKEN, force_download=True, resume_download=True
-                )
-            else:
-                return CLIPModel.from_pretrained(
-                    repo_id, token=HF_TOKEN, force_download=True, resume_download=True
-                )
-        except Exception as e:
-            last_err = e
-            time.sleep(backoff)
-            backoff *= 2
-    raise last_err
-
-@st.cache_resource(show_spinner=True)
-def load_clip_online():
-    with st.spinner("🔄 Fetching CLIP (openai/clip-vit-base-patch32) from Hugging Face…"):
-        model = _online_from_pretrained(HF_REPO, is_processor=False)
-        processor = _online_from_pretrained(HF_REPO, is_processor=True)
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        model.to(device).eval()
-    return model, processor, device
-
-clip_model, clip_processor, device = load_clip_online()
-
-# ---------- PROMPT ENSEMBLE (AI vs Human clusters) ----------
-AI_TEXTS = [
-    "an AI-generated image, synthetic, digital rendering",
-    "a computer-generated picture created by an AI model",
-    "AI art, unreal, diffusion model output",
-    "synthetic photo with smooth textures and perfect edges",
-]
-HUMAN_TEXTS = [
-    "a real photo taken by a camera",
-    "a natural human-made photograph",
-    "an authentic, real-world image captured by a person",
-    "photo with realistic depth of field and natural grain",
-]
-
-@st.cache_resource(show_spinner=False)
-def encode_texts_online():
-    texts = AI_TEXTS + HUMAN_TEXTS
-    inputs = clip_processor(text=texts, return_tensors="pt", padding=True)
-    with torch.no_grad():
-        feats = clip_model.get_text_features(**inputs)
-    feats = feats / feats.norm(p=2, dim=-1, keepdim=True)
-    return feats, len(AI_TEXTS), len(HUMAN_TEXTS)
-
-TEXT_FEATS, N_AI, N_HUM = encode_texts_online()
-
-# ---------- TYPE DETECTION ----------
-IMAGE_MIME_PREFIXES = {"image/"}
-VIDEO_MIME_PREFIXES = {"video/", "application/octet-stream"}  # some servers mislabel videos
-
-def guess_url_kind(url: str, resp_headers: dict) -> str:
-    """Return 'image' or 'video' based on headers/extension; default to 'image' if PIL can open."""
-    ctype = resp_headers.get("Content-Type", "").lower()
-    if any(ctype.startswith(p) for p in IMAGE_MIME_PREFIXES):
-        return "image"
-    if any(ctype.startswith(p) for p in VIDEO_MIME_PREFIXES):
-        # If extension hints image, still check PIL later; default video here
-        return "video"
-    # Fallback to extension check
-    path = urlparse(url).path.lower()
-    if any(path.endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tiff"]):
-        return "image"
-    if any(path.endswith(ext) for ext in [".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"]):
-        return "video"
-    # Unknown: we’ll try image first; if PIL fails, we’ll treat as video
-    return "unknown"
-
-# ---------- HELPERS ----------
-def load_image_from_url(url: str) -> Image.Image:
-    r = requests.get(url, timeout=120, stream=True)
-    r.raise_for_status()
-    # Try PIL directly from streamed content (limit size in memory)
-    data = io.BytesIO(r.content)
-    img = Image.open(data).convert("RGB")
-    return img
-
-def download_video_from_url(url: str) -> str:
-    r = requests.get(url, timeout=240, stream=True)
-    r.raise_for_status()
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".bin")
-    for chunk in r.iter_content(chunk_size=1024 * 1024):
-        if chunk:
-            tmp.write(chunk)
-    tmp.flush(); tmp.close()
-    # Try to remap extension based on URL path if possible
-    path = urlparse(url).path.lower()
-    ext = ".mp4"
-    for cand in [".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"]:
-        if path.endswith(cand):
-            ext = cand
-            break
-    new_name = tmp.name.replace(".bin", ext)
-    os.replace(tmp.name, new_name)
-    return new_name
-
-def image_dims(img: Image.Image):
-    return img.width, img.height
-
-def classify_image(img: Image.Image):
-    """Return decision label only (no probabilities). Uses light test-time augmentation."""
-    # TTA: original + resized-long-edge 512 + center crop (if possible)
-    variants = [img]
+def analyze_video(video_path: str):
+    """Extract width, height, and resolution from video"""
     try:
-        long = max(img.size)
-        if long != 512:
-            scale = 512 / long
-            rsz = img.resize((int(img.width * scale), int(img.height * scale)), Image.BICUBIC)
-            variants.append(rsz)
-        # center crop to squared min side
-        side = min(img.size)
-        left = (img.width - side) // 2
-        top = (img.height - side) // 2
-        crop = img.crop((left, top, left + side, top + side))
-        variants.append(crop)
-    except Exception:
-        pass
+        clip = VideoFileClip(video_path)
+        width, height = clip.size
+        resolution = f"{width}x{height}"
+        clip.close()
+        return width, height, resolution
+    except Exception as e:
+        return None, None, f"Error analyzing video: {str(e)}"
 
-    votes = []
-    for v in variants:
-        inputs = clip_processor(images=v, return_tensors="pt")
-        for k in inputs:
-            inputs[k] = inputs[k].to(device)
-        with torch.no_grad():
-            if device == "cuda":
-                with torch.cuda.amp.autocast():
-                    img_feats = clip_model.get_image_features(**inputs)
-            else:
-                img_feats = clip_model.get_image_features(**inputs)
-        img_feats = img_feats / img_feats.norm(p=2, dim=-1, keepdim=True)
-        logits = img_feats @ TEXT_FEATS.T
-        logits = logits.squeeze(0)
-        ai_logit = logits[:N_AI].mean()
-        hm_logit = logits[N_AI:N_AI+N_HUM].mean()
-        label = "AI-generated" if ai_logit.item() >= hm_logit.item() else "Human-made"
-        votes.append(label)
+# ==============================
+# Streamlit UI
+# ==============================
+st.set_page_config(page_title="TruthLens — Media Analyzer", layout="centered")
+st.title("🛡️ TruthLens — Media Analyzer")
+st.markdown("Analyze uploaded or URL-based **images and videos** for their properties.")
 
-    # Majority vote among variants
-    decision = "AI-generated" if votes.count("AI-generated") >= votes.count("Human-made") else "Human-made"
-    return decision
+option = st.radio(
+    "Choose Input Type:",
+    ["Upload Image", "Upload Video", "URL Image", "URL Video"]
+)
 
-def classify_video(video_path: str, max_frames: int = 16):
-    """Sample evenly-spaced frames, vote using image classifier; return decision + dims."""
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        raise RuntimeError("Could not open video file (codec/format unsupported by OpenCV).")
+# ==============================
+# Upload Image
+# ==============================
+if option == "Upload Image":
+    uploaded = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
+    if uploaded:
+        img = Image.open(uploaded).convert("RGB")
+        w, h, res = analyze_image(img)
+        st.image(img, caption="Uploaded Image", use_container_width=True)
+        st.success(f"**Width:** {w} px\n\n**Height:** {h} px\n\n**Resolution:** {res}")
 
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
-    fps = cap.get(cv2.CAP_PROP_FPS) or 0.0
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 0
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 0
+# ==============================
+# Upload Video
+# ==============================
+elif option == "Upload Video":
+    uploaded = st.file_uploader("Upload a video", type=["mp4", "avi", "mov", "mkv"])
+    if uploaded:
+        tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+        tfile.write(uploaded.read())
+        w, h, res = analyze_video(tfile.name)
+        st.video(tfile.name)
+        if w and h:
+            st.success(f"**Width:** {w} px\n\n**Height:** {h} px\n\n**Resolution:** {res}")
+        else:
+            st.error(res)
+        os.unlink(tfile.name)
 
-    n = min(max_frames, max(1, total_frames)) if total_frames else max_frames
-    indices = np.linspace(0, max(0, total_frames - 1), num=n).astype(int)
-
-    votes = []
-    prog = st.progress(0, text="Analyzing video frames…")
-    for i, idx in enumerate(indices, start=1):
-        cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx))
-        ok, frame = cap.read()
-        if not ok:
-            prog.progress(i / len(indices), text=f"Skipping unreadable frame {i}/{len(indices)}")
-            continue
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        pil = Image.fromarray(frame_rgb)
-        votes.append(classify_image(pil))
-        prog.progress(i / len(indices), text=f"Analyzing frame {i}/{len(indices)}")
-    cap.release()
-
-    decision = "AI-generated" if votes.count("AI-generated") >= votes.count("Human-made") else "Human-made"
-    duration = (total_frames / fps) if (fps and total_frames) else 0.0
-    return {
-        "decision": decision,
-        "width": width,
-        "height": height,
-        "resolution": f"{width} × {height}",
-        "fps": fps,
-        "frames": total_frames,
-        "duration": duration
-    }
-
-def verdict_card(kind: str, decision: str, width: int, height: int, extra: dict | None = None):
-    res = f"{width} × {height}"
-    parts = [
-        f"<b>Type:</b> {kind}",
-        f"<b>Decision:</b> {decision}",
-        f"<b>Width:</b> {width}px",
-        f"<b>Height:</b> {height}px",
-        f"<b>Resolution:</b> {res}",
-    ]
-    if extra:
-        if "fps" in extra and extra["fps"]:
-            parts.append(f"<b>FPS:</b> {extra['fps']:.2f}")
-        if "frames" in extra and extra["frames"]:
-            parts.append(f"<b>Frames:</b> {extra['frames']}")
-        if "duration" in extra and extra["duration"]:
-            parts.append(f"<b>Duration:</b> {extra['duration']:.2f}s")
-    html = '<div class="neon-card">' + "<br>".join(parts) + "</div>"
-    st.markdown(html, unsafe_allow_html=True)
-
-# ---------- UI: TABS ----------
-tab_url, tab_upload = st.tabs(["🔗 Analyze via URL", "📁 Upload Media"])
-
-with tab_url:
-    st.subheader("Analyze Image or Video from URL")
-    url = st.text_input("Paste any direct link to an image or video (any extension/host):")
-
-    if st.button("Analyze URL", type="primary") and url:
+# ==============================
+# URL Image
+# ==============================
+elif option == "URL Image":
+    url = st.text_input("Paste image URL:")
+    if url:
         try:
-            # HEAD first to guess type; fallback to GET
-            head = None
-            try:
-                head = requests.head(url, timeout=15, allow_redirects=True)
-            except Exception:
-                pass
-            kind_guess = guess_url_kind(url, head.headers if head else {})
-
-            if kind_guess in ("image", "unknown"):
-                # Try image first
-                try:
-                    img = load_image_from_url(url)
-                    w, h = image_dims(img)
-                    decision = classify_image(img)
-                    st.image(img, caption=f"Loaded Image — {w}×{h}px", use_column_width=True)
-                    verdict_card("Image", decision, w, h)
-                except (UnidentifiedImageError, OSError, requests.RequestException):
-                    # If image open failed, try video path
-                    path = download_video_from_url(url)
-                    st.video(path)
-                    info = classify_video(path, max_frames=16)
-                    verdict_card("Video", info["decision"], info["width"], info["height"],
-                                 {"fps": info["fps"], "frames": info["frames"], "duration": info["duration"]})
-            else:
-                # Video first
-                path = download_video_from_url(url)
-                st.video(path)
-                info = classify_video(path, max_frames=16)
-                verdict_card("Video", info["decision"], info["width"], info["height"],
-                             {"fps": info["fps"], "frames": info["frames"], "duration": info["duration"]})
-
-        except requests.RequestException as e:
-            st.error(f"Network error while fetching media: {e}")
+            response = requests.get(url, stream=True)
+            img = Image.open(response.raw).convert("RGB")
+            w, h, res = analyze_image(img)
+            st.image(img, caption="Image from URL", use_container_width=True)
+            st.success(f"**Width:** {w} px\n\n**Height:** {h} px\n\n**Resolution:** {res}")
         except Exception as e:
-            st.error(f"Failed to analyze URL: {e}")
+            st.error(f"Failed to analyze image: {str(e)}")
 
-with tab_upload:
-    st.subheader("Upload Image or Video")
-    # Accept ANY file; auto-detect content by attempting PIL first, then OpenCV
-    file = st.file_uploader("Choose any file (image/video of any extension)", type=None)  # no type filter
-
-    if file:
+# ==============================
+# URL Video
+# ==============================
+elif option == "URL Video":
+    url = st.text_input("Paste video URL (.mp4 recommended):")
+    if url:
         try:
-            # Try as image
-            file_bytes = file.read()
-            bio = io.BytesIO(file_bytes)
-            try:
-                img = Image.open(bio).convert("RGB")
-                w, h = image_dims(img)
-                decision = classify_image(img)
-                st.image(img, caption=f"Uploaded Image — {w}×{h}px", use_column_width=True)
-                verdict_card("Image", decision, w, h)
-            except UnidentifiedImageError:
-                # Not an image: write to temp and try as video
-                tmp = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.name or ".bin")[1] or ".mp4")
-                tmp.write(file_bytes); tmp.flush(); tmp.close()
-                st.video(tmp.name)
-                info = classify_video(tmp.name, max_frames=16)
-                verdict_card("Video", info["decision"], info["width"], info["height"],
-                             {"fps": info["fps"], "frames": info["frames"], "duration": info["duration"]})
-        except Exception as e:
-            st.error(f"Failed to analyze file: {e}")
+            # Download video to temp file
+            tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+            response = requests.get(url, stream=True)
+            for chunk in response.iter_content(chunk_size=8192):
+                tfile.write(chunk)
+            tfile.flush()
 
-# ---------- FOOTER ----------
-st.markdown('<div class="neon-card">Note: CLIP is a general vision-language model. This ensemble is a strong heuristic, not a proof. For critical decisions, combine with metadata checks and model-specific artifact detectors.</div>', unsafe_allow_html=True)
+            w, h, res = analyze_video(tfile.name)
+            st.video(tfile.name)
+            if w and h:
+                st.success(f"**Width:** {w} px\n\n**Height:** {h} px\n\n**Resolution:** {res}")
+            else:
+                st.error(res)
+
+            os.unlink(tfile.name)
+        except Exception as e:
+            st.error(f"Failed to analyze video: {str(e)}")
+
