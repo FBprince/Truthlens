@@ -998,23 +998,40 @@
 
 
 
+# truthlens_ai_detector.py
+"""
+Truthlens-Ai Detector
+Single-file Streamlit app — Ensemble AI-vs-Human media detection (images & videos).
+Features:
+ - Upload or paste direct URL (image/video).
+ - Ensemble uses CLIP multi-prompt heuristic + optional deepfake classifier + optional frame model + face-crop checks + EXIF camera check.
+ - Video processing uses OpenCV for robust Cloud compatibility (no moviepy dependency).
+ - Outputs: "AI-generated" or "Human-made" and Width × Height resolution (no percentages).
+ - Configure model paths via environment variables: FRAME_CKPT, VIT_DIR, DEEPFAKE_MODEL_ID (optional)
+"""
 
 import os
 import io
 import tempfile
+from urllib.parse import urlparse
+
+import streamlit as st
 import requests
 import numpy as np
-import streamlit as st
 from PIL import Image, ExifTags, UnidentifiedImageError
+
 import torch
 import torch.nn.functional as F
 from transformers import CLIPProcessor, CLIPModel, AutoImageProcessor, AutoModelForImageClassification
+
 import cv2
 import timm
 from torchvision import transforms
 
-# -------------- Configuration ---------------
-st.set_page_config(page_title="TruthLens — Accurate Ensemble Detector", layout="wide", page_icon="🔎")
+# -------------------------
+# App config / UI
+# -------------------------
+st.set_page_config(page_title="Truthlens-Ai Detector", layout="wide", page_icon="🔎")
 st.markdown("""
 <style>
 html, body, [data-testid="stAppViewContainer"] {
@@ -1024,254 +1041,435 @@ h1, h2, h3 { color:#00f9ff !important; text-shadow: 0 0 8px #00f9ff; }
 .neon-card { border-radius:12px; padding:12px; background: rgba(6,10,20,0.6); box-shadow:0 8px 30px rgba(0,120,255,0.06); color:#dffaff; }
 </style>
 """, unsafe_allow_html=True)
-st.title("🔎 TruthLens — High-Accuracy AI vs Human Detector")
-st.markdown('<div class="neon-card">Uploads or paste URL. Outputs <b>AI-generated</b> or <b>Human-made</b> plus resolution. No percentages.</div>', unsafe_allow_html=True)
 
+st.title("🔎 Truthlens-Ai Detector")
+st.markdown('<div class="neon-card">Uploads or paste direct URLs. Output: <b>AI-generated</b> or <b>Human-made</b> plus resolution. No percentages shown.</div>', unsafe_allow_html=True)
+
+# -------------------------
+# Device & model config
+# -------------------------
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Model files - please set these or leave blank to skip
-FRAME_CKPT = os.getenv("FRAME_CKPT", "")
-VIT_DIR = os.getenv("VIT_DIR", "")
-DEEPFAKE_MODEL_ID = os.getenv("DEEPFAKE_MODEL_ID", "")
+FRAME_CKPT = os.environ.get("FRAME_CKPT", "")         # path to frame-level checkpoint (optional)
+VIT_DIR = os.environ.get("VIT_DIR", "")               # path to finetuned ViT folder (optional)
+DEEPFAKE_MODEL_ID = os.environ.get("DEEPFAKE_MODEL_ID", "")  # HF model id for deepfake classifier (optional)
+CLIP_REPO = os.environ.get("CLIP_REPO", "openai/clip-vit-base-patch32")
 
-# CLIP setup
-CLIP_REPO = "openai/clip-vit-base-patch32"
-AI_PROMPTS = ["an AI-generated image", "computer-generated image"]
-HUMAN_PROMPTS = ["real photograph", "human-made photograph"]
+# CLIP prompts
+AI_PROMPTS = [
+    "an AI-generated image, synthetic, digital rendering",
+    "a computer-generated picture created by an AI model",
+]
+HUMAN_PROMPTS = [
+    "a real photograph taken by a camera",
+    "an authentic, real-world image captured by a person",
+]
 
-@st.cache_resource
+# -------------------------
+# Helper: EXIF camera check (added/fixed)
+# -------------------------
+def exif_has_camera(img_or_path) -> bool:
+    """
+    Check if image EXIF metadata contains camera information (Make/Model/LensModel/CreatorTool).
+    Accepts a PIL.Image instance or a path/bytes.
+    """
+    try:
+        if isinstance(img_or_path, (bytes, bytearray)):
+            img = Image.open(io.BytesIO(img_or_path))
+        elif isinstance(img_or_path, str) and os.path.exists(img_or_path):
+            img = Image.open(img_or_path)
+        elif isinstance(img_or_path, Image.Image):
+            img = img_or_path
+        else:
+            return False
+
+        exif = getattr(img, "_getexif", lambda: None)()
+        if not exif:
+            return False
+        for tag_id, value in exif.items():
+            tag = ExifTags.TAGS.get(tag_id, tag_id)
+            if tag in ("Make", "Model", "LensModel", "CreatorTool"):
+                if value:
+                    return True
+    except Exception:
+        return False
+    return False
+
+# -------------------------
+# Load models (cached)
+# -------------------------
+@st.cache_resource(show_spinner=True)
 def load_clip():
     proc = CLIPProcessor.from_pretrained(CLIP_REPO)
     model = CLIPModel.from_pretrained(CLIP_REPO).to(DEVICE).eval()
     texts = AI_PROMPTS + HUMAN_PROMPTS
     inputs = proc(text=texts, return_tensors="pt", padding=True).to(DEVICE)
     with torch.no_grad():
-        feats = model.get_text_features(**inputs)
-    feats = feats / feats.norm(p=2, dim=-1, keepdim=True)
-    return proc, model, feats, len(AI_PROMPTS), len(HUMAN_PROMPTS)
+        text_feats = model.get_text_features(**inputs)
+    text_feats = text_feats / text_feats.norm(p=2, dim=-1, keepdim=True)
+    return proc, model, text_feats, len(AI_PROMPTS), len(HUMAN_PROMPTS)
 
+@st.cache_resource(show_spinner=True)
+def load_deepfake_model_if_set(model_id):
+    if not model_id:
+        return None, None, None
+    try:
+        proc = AutoImageProcessor.from_pretrained(model_id)
+        mdl = AutoModelForImageClassification.from_pretrained(model_id).to(DEVICE).eval()
+        id2label = getattr(mdl.config, "id2label", {})
+        return proc, mdl, id2label
+    except Exception:
+        return None, None, None
+
+@st.cache_resource(show_spinner=True)
+def load_frame_model_if_present(ckpt_path):
+    if not ckpt_path or not os.path.exists(ckpt_path):
+        return None, None
+    try:
+        ck = torch.load(ckpt_path, map_location="cpu")
+        arch = ck.get("arch", "resnest50d")
+        model = timm.create_model(arch, pretrained=False, num_classes=2)
+        model.load_state_dict(ck["model_state"])
+        model.to(DEVICE).eval()
+        transform = transforms.Compose([
+            transforms.Resize((224,224)),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485,0.456,0.406],[0.229,0.224,0.225])
+        ])
+        return model, transform
+    except Exception:
+        return None, None
+
+@st.cache_resource(show_spinner=True)
+def load_vit_if_present(vit_dir):
+    if not vit_dir or not os.path.isdir(vit_dir):
+        return None, None
+    try:
+        proc = AutoImageProcessor.from_pretrained(vit_dir)
+        mdl = AutoModelForImageClassification.from_pretrained(vit_dir).to(DEVICE).eval()
+        return proc, mdl
+    except Exception:
+        return None, None
+
+# load models
 clip_proc, clip_model, TEXT_FEATS, N_AI, N_HUM = load_clip()
+df_proc, df_model, df_id2label = load_deepfake_model_if_set(DEEPFAKE_MODEL_ID)
+frame_model, frame_transform = load_frame_model_if_present(FRAME_CKPT)
+vit_proc, vit_model = load_vit_if_present(VIT_DIR)
 
-@st.cache_resource
-def load_deepfake_model():
-    if not DEEPFAKE_MODEL_ID:
-        return None, None, None
-    try:
-        proc = AutoImageProcessor.from_pretrained(DEEPFAKE_MODEL_ID)
-        model = AutoModelForImageClassification.from_pretrained(DEEPFAKE_MODEL_ID).to(DEVICE).eval()
-        id2label = model.config.id2label if hasattr(model.config, "id2label") else {}
-        return proc, model, id2label
-    except:
-        return None, None, None
-
-df_proc, df_model, df_id2label = load_deepfake_model()
-
-@st.cache_resource
-def load_frame_model():
-    if not FRAME_CKPT or not os.path.exists(FRAME_CKPT):
-        return None, None
-    ck = torch.load(FRAME_CKPT, map_location="cpu")
-    arch = ck.get("arch", "resnest50d")
-    model = timm.create_model(arch, pretrained=False, num_classes=2)
-    model.load_state_dict(ck["model_state"])
-    model.to(DEVICE).eval()
-    transform = transforms.Compose([
-        transforms.Resize((224,224)), transforms.ToTensor(),
-        transforms.Normalize([0.485,0.456,0.406],[0.229,0.224,0.225])
-    ])
-    return model, transform
-
-frame_model, frame_transform = load_frame_model()
-
-@st.cache_resource
-def load_vit():
-    if not VIT_DIR or not os.path.isdir(VIT_DIR):
-        return None, None
-    try:
-        proc = AutoImageProcessor.from_pretrained(VIT_DIR)
-        model = AutoModelForImageClassification.from_pretrained(VIT_DIR).to(DEVICE).eval()
-        return proc, model
-    except:
-        return None, None
-
-vit_proc, vit_model = load_vit()
-
-# Face detector
-FACE_PROTO = "deploy.prototxt"; FACE_MODEL = "res10_300x300_ssd_iter_140000.caffemodel"
+# Face detector (OpenCV DNN). Attempt to download if missing.
+FACE_PROTO = "deploy.prototxt"
+FACE_MODEL = "res10_300x300_ssd_iter_140000.caffemodel"
 if not (os.path.exists(FACE_PROTO) and os.path.exists(FACE_MODEL)):
     try:
-        p = requests.get("https://raw.githubusercontent.com/opencv/opencv/master/samples/dnn/face_detector/deploy.prototxt")
+        p = requests.get("https://raw.githubusercontent.com/opencv/opencv/master/samples/dnn/face_detector/deploy.prototxt", timeout=30)
+        p.raise_for_status()
         with open(FACE_PROTO, "wb") as f: f.write(p.content)
-        m = requests.get("https://github.com/opencv/opencv_3rdparty/raw/dnn_samples_face_detector_20170830/res10_300x300_ssd_iter_140000.caffemodel")
+        m = requests.get("https://github.com/opencv/opencv_3rdparty/raw/dnn_samples_face_detector_20170830/res10_300x300_ssd_iter_140000.caffemodel", timeout=60)
+        m.raise_for_status()
         with open(FACE_MODEL, "wb") as f: f.write(m.content)
-    except:
+    except Exception:
         pass
+
 FACE_NET = None
 if os.path.exists(FACE_PROTO) and os.path.exists(FACE_MODEL):
-    FACE_NET = cv2.dnn.readNetFromCaffe(FACE_PROTO, FACE_MODEL)
+    try:
+        FACE_NET = cv2.dnn.readNetFromCaffe(FACE_PROTO, FACE_MODEL)
+    except Exception:
+        FACE_NET = None
 
-# Helper functions (CLIP vote, deepfake, frame, ensemble, faces, video sampling)
-# [Omitted for brevity but same as earlier versions; uses only OpenCV for video sampling]
+# -------------------------
+# Small predictor helpers
+# -------------------------
+def clip_vote_image(pil_img: Image.Image) -> str:
+    try:
+        inputs = clip_proc(images=pil_img, return_tensors="pt").to(DEVICE)
+        with torch.no_grad():
+            img_feats = clip_model.get_image_features(**inputs)
+        img_feats = img_feats / img_feats.norm(p=2, dim=-1, keepdim=True)
+        logits = img_feats @ TEXT_FEATS.T
+        logits = logits.squeeze(0).cpu()
+        ai_score = logits[:N_AI].mean().item()
+        hm_score = logits[N_AI:N_AI+N_HUM].mean().item()
+        return "AI-generated" if ai_score >= hm_score else "Human-made"
+    except Exception:
+        return "Human-made"
 
-def clip_vote_image(img):
-    inputs = clip_proc(images=img, return_tensors="pt").to(DEVICE)
-    with torch.no_grad():
-        feats_img = clip_model.get_image_features(**inputs)
-    feats_img = feats_img / feats_img.norm(p=2, dim=-1, keepdim=True)
-    logits = feats_img @ TEXT_FEATS.T
-    ai = logits[:, :N_AI].mean().item(); hm = logits[:, N_AI:].mean().item()
-    return "AI-generated" if ai >= hm else "Human-made"
+def deepfake_predict(pil_img: Image.Image) -> str | None:
+    if df_model is None:
+        return None
+    try:
+        inputs = df_proc(images=pil_img, return_tensors="pt").to(DEVICE)
+        with torch.no_grad():
+            out = df_model(**inputs)
+            logits = out.logits
+            pred = int(torch.argmax(logits, dim=-1).cpu().item())
+            if df_id2label:
+                label = df_id2label.get(pred) or df_id2label.get(str(pred)) or ""
+                if "fake" in label.lower() or "deep" in label.lower() or "ai" in label.lower():
+                    return "AI-generated"
+                else:
+                    return "Human-made"
+            return "AI-generated" if pred == 0 else "Human-made"
+    except Exception:
+        return None
 
-def deepfake_predict(img):
-    if not df_model: return None
-    inputs = df_proc(images=img, return_tensors="pt").to(DEVICE)
-    with torch.no_grad():
-        out = df_model(**inputs)
-        pred = out.logits.argmax(dim=-1).item()
-    label = df_id2label.get(pred, "")
-    return "AI-generated" if "fake" in label.lower() or "deep" in label.lower() else "Human-made"
+def frame_predict(pil_img: Image.Image) -> str | None:
+    if frame_model is None or frame_transform is None:
+        return None
+    try:
+        x = frame_transform(pil_img).unsqueeze(0).to(DEVICE)
+        with torch.no_grad():
+            logits = frame_model(x)
+            pred = int(torch.argmax(logits, dim=1).cpu().item())
+        return "AI-generated" if pred == 0 else "Human-made"
+    except Exception:
+        return None
 
-def frame_predict(img):
-    if not frame_model: return None
-    x = frame_transform(img).unsqueeze(0).to(DEVICE)
-    with torch.no_grad():
-        pred = frame_model(x).argmax(dim=1).item()
-    return "AI-generated" if pred == 0 else "Human-made"
+def vit_predict(pil_img: Image.Image) -> str | None:
+    if vit_model is None or vit_proc is None:
+        return None
+    try:
+        inputs = vit_proc(images=pil_img, return_tensors="pt").to(DEVICE)
+        with torch.no_grad():
+            out = vit_model(**inputs)
+        pred = int(torch.argmax(out.logits, dim=-1).cpu().item())
+        return "AI-generated" if pred == 0 else "Human-made"
+    except Exception:
+        return None
 
-def vit_predict(img):
-    if not vit_model: return None
-    inputs = vit_proc(images=img, return_tensors="pt").to(DEVICE)
-    with torch.no_grad():
-        pred = vit_model(**inputs).logits.argmax(dim=-1).item()
-    return "AI-generated" if pred == 0 else "Human-made"
-
-def detect_faces(img, conf_thresh=0.5):
-    if not FACE_NET: return []
-    arr = np.array(img.convert("RGB")); h,w=arr.shape[:2]
-    blob = cv2.dnn.blobFromImage(cv2.resize(arr,(300,300)),1.0,(300,300),(104,177,123))
+def detect_faces_and_crops(pil_img: Image.Image, min_conf=0.5):
+    if FACE_NET is None:
+        return []
+    img = np.array(pil_img.convert("RGB"))
+    h, w = img.shape[:2]
+    blob = cv2.dnn.blobFromImage(cv2.resize(img, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0))
     FACE_NET.setInput(blob)
-    det = FACE_NET.forward()
-    crops=[]
-    for i in range(det.shape[2]):
-        if det[0,0,i,2]>conf_thresh:
-            x1,y1,x2,y2 = (det[0,0,i,3:7]*np.array([w,h,w,h])).astype(int)
-            pad = int(0.05*max(x2-x1,y2-y1))
-            crop = arr[max(0,y1-pad):min(h,y2+pad), max(0,x1-pad):min(w,x2+pad)]
-            if crop.size: crops.append(Image.fromarray(crop))
+    detections = FACE_NET.forward()
+    crops = []
+    for i in range(0, detections.shape[2]):
+        conf = float(detections[0, 0, i, 2])
+        if conf > min_conf:
+            box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+            (x1, y1, x2, y2) = box.astype("int")
+            pad = int(0.05 * max(x2 - x1, y2 - y1))
+            x1 = max(0, x1 - pad); y1 = max(0, y1 - pad)
+            x2 = min(w, x2 + pad); y2 = min(h, y2 + pad)
+            crop = Image.fromarray(img[y1:y2, x1:x2])
+            crops.append(crop)
     return crops
 
-def ensemble_image(img):
-    votes={"AI-generated":0,"Human-made":0}
-    if exif_has_camera(img): votes["Human-made"]+=4
-    df = deepfake_predict(img)
-    if df: votes[df]+=3
-    fr = frame_predict(img)
-    if fr: votes[fr]+=2
-    vt = vit_predict(img)
-    if vt: votes[vt]+=2
-    cp = clip_vote_image(img); votes[cp]+=1
-    for f in detect_faces(img):
-        df2 = deepfake_predict(f); fr2 = frame_predict(f); cp2 = clip_vote_image(f)
-        if df2: votes[df2]+=1.5
-        if fr2: votes[fr2]+=1
-        votes[cp2]+=0.5
-    return "AI-generated" if votes["AI-generated"] >= votes["Human-made"] else "Human-made"
+# -------------------------
+# Ensemble per-image logic
+# -------------------------
+def ensemble_decision_for_image(pil_img: Image.Image) -> str:
+    votes = {"AI-generated": 0.0, "Human-made": 0.0}
 
-def sample_video_frames(path, n=12):
+    # EXIF camera check
+    try:
+        if exif_has_camera(pil_img):
+            votes["Human-made"] += 4.0
+    except Exception:
+        pass
+
+    # deepfake classifier full image
+    df_full = deepfake_predict(pil_img)
+    if df_full == "AI-generated":
+        votes["AI-generated"] += 3.0
+    elif df_full == "Human-made":
+        votes["Human-made"] += 3.0
+
+    # frame model full image
+    fm_full = frame_predict(pil_img)
+    if fm_full == "AI-generated":
+        votes["AI-generated"] += 1.5
+    elif fm_full == "Human-made":
+        votes["Human-made"] += 1.5
+
+    # vit full image
+    vit_full = vit_predict(pil_img)
+    if vit_full == "AI-generated":
+        votes["AI-generated"] += 1.5
+    elif vit_full == "Human-made":
+        votes["Human-made"] += 1.5
+
+    # CLIP full image
+    try:
+        clip_full = clip_vote_image(pil_img)
+        votes[clip_full] += 1.0
+    except Exception:
+        pass
+
+    # face crops
+    try:
+        crops = detect_faces_and_crops(pil_img)
+    except Exception:
+        crops = []
+    for crop in crops:
+        df_c = deepfake_predict(crop)
+        if df_c == "AI-generated":
+            votes["AI-generated"] += 2.0
+        elif df_c == "Human-made":
+            votes["Human-made"] += 2.0
+        fm_c = frame_predict(crop)
+        if fm_c == "AI-generated":
+            votes["AI-generated"] += 1.0
+        elif fm_c == "Human-made":
+            votes["Human-made"] += 1.0
+        try:
+            clip_c = clip_vote_image(crop)
+            votes[clip_c] += 0.5
+        except Exception:
+            pass
+
+    # tie-breaker: CLIP full image
+    if abs(votes["AI-generated"] - votes["Human-made"]) < 1e-6:
+        try:
+            return clip_vote_image(pil_img)
+        except Exception:
+            return "Human-made"
+    return "AI-generated" if votes["AI-generated"] > votes["Human-made"] else "Human-made"
+
+# -------------------------
+# Video helpers (OpenCV sampling)
+# -------------------------
+def sample_frames_from_video_opencv(path, n_frames=16):
     cap = cv2.VideoCapture(path)
-    if not cap.isOpened(): return []
+    if not cap.isOpened():
+        return []
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
-    if total<=0:
-        cap.release(); return []
-    idxs = np.linspace(0, total-1, min(n,total)).astype(int)
-    frames=[]
-    for i in idxs:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, int(i))
-        ok, fr = cap.read()
-        if ok:
-            frames.append(Image.fromarray(cv2.cvtColor(fr,cv2.COLOR_BGR2RGB)))
+    if total <= 0:
+        cap.release()
+        return []
+    indices = np.linspace(0, max(0, total - 1), num=min(n_frames, total)).astype(int)
+    frames = []
+    for idx in indices:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx))
+        ok, frame = cap.read()
+        if not ok:
+            continue
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frames.append(Image.fromarray(frame_rgb))
     cap.release()
     return frames
 
-def ensemble_video(path):
-    frames = sample_video_frames(path)
-    if not frames: return None
-    votes={"AI-generated":0,"Human-made":0}
+def ensemble_decision_for_video(path, n_sample_frames=12):
+    frames = sample_frames_from_video_opencv(path, n_frames=n_sample_frames)
+    if not frames:
+        return None
+    votes = {"AI-generated": 0, "Human-made": 0}
     for f in frames:
-        votes[ensemble_image(f)] += 1
+        d = ensemble_decision_for_image(f)
+        votes[d] += 1
     return "AI-generated" if votes["AI-generated"] >= votes["Human-made"] else "Human-made"
 
-def get_im_dims(path, is_image=True):
-    if is_image:
-        img = Image.open(path)
-        return img.size
-    cap = cv2.VideoCapture(path)
-    if not cap.isOpened(): return (None,None)
-    return (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+# -------------------------
+# Utils for dims & download
+# -------------------------
+def get_image_dims(path):
+    try:
+        with Image.open(path) as img:
+            return img.size
+    except Exception:
+        return None, None
 
-def download_to_temp(url):
-    r = requests.get(url, stream=True, timeout=120); r.raise_for_status()
-    suf = os.path.splitext(urlparse(url).path)[1] or ""
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suf)
-    for chunk in r.iter_content(1024*1024):
-        if chunk: tmp.write(chunk)
+def get_video_dims(path):
+    try:
+        cap = cv2.VideoCapture(path)
+        if not cap.isOpened():
+            return None, None
+        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)); h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
+        return w, h
+    except Exception:
+        return None, None
+
+def download_to_temp(url: str, timeout=240):
+    r = requests.get(url, stream=True, timeout=timeout)
+    r.raise_for_status()
+    suffix = os.path.splitext(urlparse(url).path)[1] or ""
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    for chunk in r.iter_content(chunk_size=1024*1024):
+        if chunk:
+            tmp.write(chunk)
     tmp.flush(); tmp.close()
     return tmp.name
 
-# -------------- UI Tabs ---------------
-tab1,tab2 = st.tabs(["📁 Upload", "🌐 URL"])
+# -------------------------
+# UI tabs: Upload / URL
+# -------------------------
+tab_upload, tab_url = st.tabs(["📁 Upload", "🌐 URL"])
 
-with tab1:
-    st.header("Upload any file (image/video)")
-    uploaded = st.file_uploader("", type=None)
-    if uploaded:
-        ext = os.path.splitext(uploaded.name)[1].lower()
-        tmpf = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
+with tab_upload:
+    st.header("Upload an image or a video (any extension)")
+    uploaded = st.file_uploader("Drop file here (images/videos). The app auto-detects the type.", type=None)
+    if uploaded is not None:
+        suffix = os.path.splitext(uploaded.name)[1] or ""
+        tmpf = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
         tmpf.write(uploaded.read()); tmpf.flush(); tmpf.close()
         path = tmpf.name
-        # detect image
+
+        # Try image first
         try:
-            img = Image.open(path).convert("RGB")
-            w,h = img.size
-            dec = ensemble_image(img)
-            st.image(img, caption=f"Image — {w}×{h}px", use_column_width=True)
-            st.success(f"Origin: **{dec}**")
+            pil = Image.open(path).convert("RGB")
+            w, h = pil.size
+            decision = ensemble_decision_for_image(pil)
+            st.image(pil, caption=f"Uploaded Image — {w}×{h}px", use_column_width=True)
+            st.success(f"Origin: **{decision}**")
             st.write(f"Width: **{w}px** — Height: **{h}px** — Resolution: **{w}×{h}**")
         except UnidentifiedImageError:
+            # treat as video
             st.video(path)
-            dec = ensemble_video(path)
-            w,h = get_im_dims(path, is_image=False)
-            if dec:
-                st.success(f"Origin: **{dec}**")
+            decision = ensemble_decision_for_video(path, n_sample_frames=12)
+            w, h = get_video_dims(path)
+            if decision is None:
+                st.error("Could not read video frames for analysis.")
+            else:
+                st.success(f"Origin: **{decision}**")
                 if w and h:
                     st.write(f"Width: **{w}px** — Height: **{h}px** — Resolution: **{w}×{h}**")
-            else:
-                st.error("Could not analyze video.")
 
-with tab2:
-    st.header("Paste direct image/video URL")
-    url = st.text_input("Enter URL")
-    if st.button("Analyze"):
-        tmp_path = download_to_temp(url)
-        try:
-            img = Image.open(tmp_path).convert("RGB")
-            w,h = img.size
-            dec = ensemble_image(img)
-            st.image(img, caption=f"URL Image — {w}×{h}px", use_column_width=True)
-            st.success(f"Origin: **{dec}**")
-            st.write(f"Width: **{w}px** — Height: **{h}px** — Resolution: **{w}×{h}**")
-        except UnidentifiedImageError:
-            st.video(tmp_path)
-            dec = ensemble_video(tmp_path)
-            w,h = get_im_dims(tmp_path, is_image=False)
-            if dec:
-                st.success(f"Origin: **{dec}**")
-                if w and h:
+with tab_url:
+    st.header("Paste a direct image or video URL (e.g. https://.../file.png or https://.../file.mp4)")
+    url = st.text_input("Enter URL:")
+    if st.button("Analyze URL"):
+        if not url:
+            st.error("Please paste a URL to analyze.")
+        else:
+            tmp_path = None
+            try:
+                tmp_path = download_to_temp(url)
+                # Try image
+                try:
+                    pil = Image.open(tmp_path).convert("RGB")
+                    w, h = pil.size
+                    decision = ensemble_decision_for_image(pil)
+                    st.image(pil, caption=f"URL Image — {w}×{h}px", use_column_width=True)
+                    st.success(f"Origin: **{decision}**")
                     st.write(f"Width: **{w}px** — Height: **{h}px** — Resolution: **{w}×{h}**")
-            else:
-                st.error("Could not analyze video.")
+                except UnidentifiedImageError:
+                    # Video
+                    st.video(tmp_path)
+                    decision = ensemble_decision_for_video(tmp_path, n_sample_frames=12)
+                    w, h = get_video_dims(tmp_path)
+                    if decision is None:
+                        st.error("Could not read video frames for analysis.")
+                    else:
+                        st.success(f"Origin: **{decision}**")
+                        if w and h:
+                            st.write(f"Width: **{w}px** — Height: **{h}px** — Resolution: **{w}×{h}**")
+            except requests.RequestException as e:
+                st.error(f"Network error while downloading media: {e}")
+            except Exception as e:
+                st.error(f"Failed to analyze URL: {e}")
+            finally:
+                try:
+                    if tmp_path and os.path.exists(tmp_path):
+                        os.remove(tmp_path)
+                except Exception:
+                    pass
 
-# Footer disclaimer
+# Footer
 st.markdown("---")
-st.markdown('<div class="neon-card">Detection powered by ensemble (CLIP + optional deepfake classifier + frame classifier + face analysis + EXIF). No system is infallible—please combine with human review & provenance checks.</div>', unsafe_allow_html=True)
+st.markdown('<div class="neon-card">Note: This ensemble maximizes practical detection accuracy, but no automated system is infallible. For critical decisions, combine with human review, reverse-image search, and provenance checks.</div>', unsafe_allow_html=True)
 
