@@ -2,11 +2,8 @@ streamlit
 requests
 pillow
 opencv-python-headless
-moviepy
-imageio-ffmpeg
+moviepy==1.0.3
+imageio==2.34.1
+imageio-ffmpeg==0.4.9
 numpy
-
-
-
-
 
