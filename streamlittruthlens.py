@@ -995,115 +995,107 @@
 
 
 
-
-
-
-
 import streamlit as st
 import requests
 import cv2
 import numpy as np
 from PIL import Image
+from io import BytesIO
 from moviepy.editor import VideoFileClip
-import tempfile
-import os
 
-# ==============================
-# Utility Functions
-# ==============================
-def analyze_image(img: Image.Image):
-    """Extract width, height, and resolution from image"""
+st.set_page_config(page_title="TruthLens", page_icon="🛡️", layout="centered")
+
+st.title("🛡️ TruthLens — Media Analyzer")
+st.write("Upload or paste a link to any **image** or **video (mp4)** to scan its properties.")
+
+# -----------------------------
+# Helpers
+# -----------------------------
+def get_image_properties(img: Image.Image):
     width, height = img.size
-    resolution = f"{width}x{height}"
+    resolution = width * height
     return width, height, resolution
 
-def analyze_video(video_path: str):
-    """Extract width, height, and resolution from video"""
+def analyze_image_from_bytes(image_bytes):
+    img = Image.open(BytesIO(image_bytes)).convert("RGB")
+    return get_image_properties(img)
+
+def analyze_video_with_moviepy(path):
     try:
-        clip = VideoFileClip(video_path)
+        clip = VideoFileClip(path)
         width, height = clip.size
-        resolution = f"{width}x{height}"
-        clip.close()
+        resolution = width * height
+        clip.reader.close()
+        if clip.audio:
+            clip.audio.reader.close_proc()
         return width, height, resolution
-    except Exception as e:
-        return None, None, f"Error analyzing video: {str(e)}"
+    except Exception:
+        return None
 
-# ==============================
-# Streamlit UI
-# ==============================
-st.set_page_config(page_title="TruthLens — Media Analyzer", layout="centered")
-st.title("🛡️ TruthLens — Media Analyzer")
-st.markdown("Analyze uploaded or URL-based **images and videos** for their properties.")
+def analyze_video_with_opencv(path):
+    try:
+        cap = cv2.VideoCapture(path)
+        if not cap.isOpened():
+            return None
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        resolution = width * height
+        cap.release()
+        return width, height, resolution
+    except Exception:
+        return None
 
-option = st.radio(
-    "Choose Input Type:",
-    ["Upload Image", "Upload Video", "URL Image", "URL Video"]
-)
+def download_file(url):
+    response = requests.get(url, stream=True)
+    if response.status_code == 200:
+        return BytesIO(response.content)
+    else:
+        st.error("❌ Failed to download file from URL")
+        return None
 
-# ==============================
-# Upload Image
-# ==============================
-if option == "Upload Image":
-    uploaded = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
-    if uploaded:
-        img = Image.open(uploaded).convert("RGB")
-        w, h, res = analyze_image(img)
-        st.image(img, caption="Uploaded Image", use_container_width=True)
-        st.success(f"**Width:** {w} px\n\n**Height:** {h} px\n\n**Resolution:** {res}")
+# -----------------------------
+# Upload / URL input
+# -----------------------------
+mode = st.radio("Choose Input Type", ["Upload File", "Paste URL"])
 
-# ==============================
-# Upload Video
-# ==============================
-elif option == "Upload Video":
-    uploaded = st.file_uploader("Upload a video", type=["mp4", "avi", "mov", "mkv"])
-    if uploaded:
-        tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-        tfile.write(uploaded.read())
-        w, h, res = analyze_video(tfile.name)
-        st.video(tfile.name)
-        if w and h:
-            st.success(f"**Width:** {w} px\n\n**Height:** {h} px\n\n**Resolution:** {res}")
-        else:
-            st.error(res)
-        os.unlink(tfile.name)
-
-# ==============================
-# URL Image
-# ==============================
-elif option == "URL Image":
-    url = st.text_input("Paste image URL:")
-    if url:
-        try:
-            response = requests.get(url, stream=True)
-            img = Image.open(response.raw).convert("RGB")
-            w, h, res = analyze_image(img)
-            st.image(img, caption="Image from URL", use_container_width=True)
-            st.success(f"**Width:** {w} px\n\n**Height:** {h} px\n\n**Resolution:** {res}")
-        except Exception as e:
-            st.error(f"Failed to analyze image: {str(e)}")
-
-# ==============================
-# URL Video
-# ==============================
-elif option == "URL Video":
-    url = st.text_input("Paste video URL (.mp4 recommended):")
-    if url:
-        try:
-            # Download video to temp file
-            tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-            response = requests.get(url, stream=True)
-            for chunk in response.iter_content(chunk_size=8192):
-                tfile.write(chunk)
-            tfile.flush()
-
-            w, h, res = analyze_video(tfile.name)
-            st.video(tfile.name)
-            if w and h:
-                st.success(f"**Width:** {w} px\n\n**Height:** {h} px\n\n**Resolution:** {res}")
+if mode == "Upload File":
+    uploaded_file = st.file_uploader("Upload Image or Video (mp4)", type=["jpg", "jpeg", "png", "mp4"])
+    if uploaded_file is not None:
+        if uploaded_file.type.startswith("image"):
+            st.image(uploaded_file, caption="Uploaded Image", use_container_width=True)
+            width, height, resolution = analyze_image_from_bytes(uploaded_file.read())
+            st.success(f"📏 Width: {width}px | Height: {height}px | Resolution: {resolution} pixels")
+        elif uploaded_file.type == "video/mp4":
+            with open("temp_video.mp4", "wb") as f:
+                f.write(uploaded_file.read())
+            props = analyze_video_with_moviepy("temp_video.mp4") or analyze_video_with_opencv("temp_video.mp4")
+            if props:
+                width, height, resolution = props
+                st.success(f"🎥 Width: {width}px | Height: {height}px | Resolution: {resolution} pixels")
             else:
-                st.error(res)
+                st.error("❌ Could not analyze video")
 
-            os.unlink(tfile.name)
-        except Exception as e:
-            st.error(f"Failed to analyze video: {str(e)}")
+elif mode == "Paste URL":
+    url = st.text_input("Enter Image or Video (mp4) URL")
+    if url:
+        if url.lower().endswith((".jpg", ".jpeg", ".png")):
+            file_bytes = download_file(url)
+            if file_bytes:
+                st.image(file_bytes, caption="Image from URL", use_container_width=True)
+                width, height, resolution = analyze_image_from_bytes(file_bytes.getvalue())
+                st.success(f"📏 Width: {width}px | Height: {height}px | Resolution: {resolution} pixels")
+        elif url.lower().endswith(".mp4"):
+            file_bytes = download_file(url)
+            if file_bytes:
+                with open("temp_url_video.mp4", "wb") as f:
+                    f.write(file_bytes.getbuffer())
+                props = analyze_video_with_moviepy("temp_url_video.mp4") or analyze_video_with_opencv("temp_url_video.mp4")
+                if props:
+                    width, height, resolution = props
+                    st.success(f"🎥 Width: {width}px | Height: {height}px | Resolution: {resolution} pixels")
+                else:
+                    st.error("❌ Could not analyze video")
+        else:
+            st.warning("⚠️ Unsupported file type. Please use JPG, PNG, or MP4.")
+
 
