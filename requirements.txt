@@ -1,10 +1,11 @@
-
 streamlit
 requests
 pillow
 opencv-python-headless
 moviepy
+imageio-ffmpeg
 numpy
+
 
 
 
