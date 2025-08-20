@@ -4,5 +4,6 @@ pillow
 opencv-python-headless
 transformers
 torch
-timm
 numpy
+imageio
+imageio-ffmpeg
