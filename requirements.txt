@@ -1,12 +1,9 @@
-
 streamlit
 requests
 pillow
 opencv-python-headless
-moviepy
-numpy
-torch
 transformers
-timm
-huggingface-hub
+torch
+moviepy
 imageio-ffmpeg
+numpy
