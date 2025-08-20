@@ -1,15 +1,14 @@
-
 streamlit
+torch
+torchvision
+torchaudio
+transformers
+huggingface-hub
 requests
+pillow
+opencv-python-headless
+numpy
 beautifulsoup4
 lxml
 
 
-pillow
-opencv-python-headless
-numpy
-
-torch
-transformers
-huggingface-hub
-sentencepiece
