@@ -1,14 +1,14 @@
 streamlit
 torch
-torchvision
-torchaudio
 transformers
-huggingface-hub
+huggingface_hub
 requests
 pillow
 opencv-python-headless
 numpy
+moviepy
 beautifulsoup4
 lxml
+
 
 
