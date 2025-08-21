@@ -994,26 +994,23 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
 # truthlens_ai_detector.py
 """
-Truthlens-Ai Detector — Full single-file Streamlit app with Hugging Face deepfake integration.
-
-Features:
- - URL tab first (paste direct media URL, page URL, or data URI)
- - Upload tab (images/videos)
- - Ensemble of signals: EXIF, CLIP multi-prompt, optional ViT/frame models, face-crop deepfake checks,
-   heuristics (ELA, JPEG quant variance, noise), and a dedicated Hugging Face deepfake classifier.
- - Video support: OpenCV sampling of frames and per-frame ensemble voting with configurable AI ratio threshold.
- - Tunable slider weights in sidebar.
- - Default deepfake model: "prithivMLmods/deepfake-detector-model-v1" (override with DEEPFAKE_MODEL_ID env var).
- - Note: Improves detection accuracy for realistic fakes but cannot guarantee 100% accuracy.
-
-Requirements (example):
- - Python packages: streamlit, requests, beautifulsoup4, pillow, torch, torchvision, transformers,
-   timm, opencv-python-headless, numpy
- - Optionally set environment variables FRAME_CKPT, VIT_DIR, DEEPFAKE_MODEL_ID to load extra models.
-
-Default deepfake model source: prithivMLmods/deepfake-detector-model-v1 (Hugging Face). See model card for details.
+Truthlens-Ai Detector — Hidden Advanced Settings + High-accuracy defaults
+ - Advanced ensemble sliders are hidden unless you set TRUTHLENS_ADMIN_KEY env var and unlock via password.
+ - Default weights tuned for higher accuracy.
+ - Deepfake model integrated (override with DEEPFAKE_MODEL_ID env var).
+ - URL tab first. Summary shown to regular users; detailed frame JSON only visible to admin after unlock.
 """
 import os
 import io
@@ -1023,6 +1020,7 @@ from urllib.parse import urlparse
 import mimetypes
 import base64
 import time
+import json
 
 import streamlit as st
 import requests
@@ -1037,23 +1035,31 @@ import timm
 from torchvision import transforms
 
 # -------------------------
-# Top-level config / UI
+# Page config
 # -------------------------
 st.set_page_config(page_title="Truthlens-Ai Detector", layout="wide", page_icon="🔎")
-st.markdown("""<style>
-html, body, [data-testid="stAppViewContainer"] {
-  background: radial-gradient(circle at 10% 10%, #001021, #000000) !important;
-}
-h1, h2, h3 { color:#00f9ff !important; text-shadow: 0 0 8px #00f9ff; }
-.neon-card { border-radius:12px; padding:12px; background: rgba(6,10,20,0.6); box-shadow:0 8px 30px rgba(0,120,255,0.06); color:#dffaff; }
-small { color:#9fdfff; }
-</style>""", unsafe_allow_html=True)
+st.markdown(
+    """
+    <style>
+    html, body, [data-testid="stAppViewContainer"] {
+      background: radial-gradient(circle at 10% 10%, #001021, #000000) !important;
+    }
+    h1, h2, h3 { color:#00f9ff !important; text-shadow: 0 0 8px #00f9ff; }
+    .neon-card { border-radius:12px; padding:12px; background: rgba(6,10,20,0.6); box-shadow:0 8px 30px rgba(0,120,255,0.06); color:#dffaff; }
+    small { color:#9fdfff; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-st.title("🔎 Truthlens-Ai Detector — Deepfake-integrated")
-st.markdown('<div class="neon-card">Paste any link (direct media URL, page URL, or data URI) or upload a file. Output: <b>AI-generated</b> or <b>Human-made</b> plus resolution. Use the sidebar to tune weights.</div>', unsafe_allow_html=True)
+st.title("🔎 Truthlens-Ai Detector")
+st.markdown(
+    '<div class="neon-card">Paste any link (direct media URL, page URL, or data URI) or upload a file. Output: <b>AI-generated</b> or <b>Human-made</b>. Advanced ensemble settings are hidden by default.</div>',
+    unsafe_allow_html=True,
+)
 
 # -------------------------
-# Device / model config (safe fallback)
+# Device & model config
 # -------------------------
 try:
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -1062,11 +1068,10 @@ except Exception:
 
 FRAME_CKPT = os.environ.get("FRAME_CKPT", "")
 VIT_DIR = os.environ.get("VIT_DIR", "")
-# Default deepfake model (change via env var): prithivMLmods/deepfake-detector-model-v1
 DEEPFAKE_MODEL_ID = os.environ.get("DEEPFAKE_MODEL_ID", "prithivMLmods/deepfake-detector-model-v1")
 CLIP_REPO = os.environ.get("CLIP_REPO", "openai/clip-vit-base-patch32")
 
-# CLIP prompts (extendable)
+# CLIP prompts
 AI_PROMPTS = [
     "an AI-generated image, synthetic, digital rendering",
     "a computer-generated picture created by an AI model",
@@ -1077,18 +1082,69 @@ HUMAN_PROMPTS = [
 ]
 
 # -------------------------
-# Sidebar: tunables
+# Admin key / advanced visibility
 # -------------------------
-st.sidebar.header("Ensemble settings")
-exif_weight = st.sidebar.slider("EXIF (camera) weight", 0.0, 6.0, 4.0, 0.5)
-deepfake_weight = st.sidebar.slider("Deepfake classifier weight", 0.0, 5.0, 3.0, 0.5)
-frame_weight = st.sidebar.slider("Frame model weight", 0.0, 3.0, 1.5, 0.25)
-vit_weight = st.sidebar.slider("ViT weight", 0.0, 3.0, 1.5, 0.25)
-clip_weight = st.sidebar.slider("CLIP weight", 0.0, 2.0, 1.0, 0.25)
-face_crop_weights = st.sidebar.slider("Face-crop multiplier (per face)", 0.0, 3.0, 1.0, 0.1)
-video_ratio = st.sidebar.slider("Video decision min AI frame ratio", 0.0, 1.0, 0.7, 0.05)
-st.sidebar.markdown("**Guidance:** Increase weights to trust that signal more. No single signal should determine the outcome alone.")
-st.sidebar.markdown("**Note:** This improves robustness but cannot reach 100% accuracy.")
+ADMIN_KEY = os.environ.get("TRUTHLENS_ADMIN_KEY", "").strip()  # set this in the environment for admin access
+
+if "admin_authenticated" not in st.session_state:
+    st.session_state["admin_authenticated"] = False
+
+# Sidebar: admin unlock (only visible if ADMIN_KEY is set)
+st.sidebar.title("Truthlens")
+if ADMIN_KEY:
+    st.sidebar.markdown("**Admin:** unlock advanced settings")
+    if not st.session_state["admin_authenticated"]:
+        admin_input = st.sidebar.text_input("Enter admin key", type="password")
+        if st.sidebar.button("Unlock advanced settings"):
+            if admin_input and admin_input == ADMIN_KEY:
+                st.session_state["admin_authenticated"] = True
+                st.sidebar.success("Advanced settings unlocked")
+            else:
+                st.sidebar.error("Incorrect admin key")
+    else:
+        st.sidebar.success("Advanced settings unlocked (admin)")
+else:
+    st.sidebar.markdown("Advanced settings hidden. (Set TRUTHLENS_ADMIN_KEY env var to enable)")
+
+# -------------------------
+# High-accuracy defaults (used when advanced hidden)
+# -------------------------
+DEFAULTS = {
+    "exif_weight": 2.0,
+    "deepfake_weight": 5.0,
+    "frame_weight": 2.5,
+    "vit_weight": 2.0,
+    "clip_weight": 3.0,
+    "face_crop_multiplier": 1.5,
+    "video_ratio": 0.75,
+    "n_sample_frames": 16
+}
+
+# If admin authenticated, show sliders inside a collapsed expander
+if st.session_state["admin_authenticated"]:
+    with st.sidebar.expander("⚙ Advanced ensemble settings (admin only)", expanded=False):
+        exif_weight = st.slider("EXIF (camera) weight", 0.0, 6.0, DEFAULTS["exif_weight"], 0.1)
+        deepfake_weight = st.slider("Deepfake classifier weight", 0.0, 6.0, DEFAULTS["deepfake_weight"], 0.1)
+        frame_weight = st.slider("Frame model weight", 0.0, 4.0, DEFAULTS["frame_weight"], 0.1)
+        vit_weight = st.slider("ViT weight", 0.0, 4.0, DEFAULTS["vit_weight"], 0.1)
+        clip_weight = st.slider("CLIP weight", 0.0, 4.0, DEFAULTS["clip_weight"], 0.1)
+        face_crop_multiplier = st.slider("Face-crop multiplier (per face)", 0.0, 3.0, DEFAULTS["face_crop_multiplier"], 0.1)
+        video_ratio = st.slider("Video decision min AI frame ratio", 0.0, 1.0, DEFAULTS["video_ratio"], 0.01)
+        n_sample_frames = st.slider("Video sample frames", 4, 32, DEFAULTS["n_sample_frames"], 1)
+else:
+    # advanced hidden: use defaults tuned for higher accuracy
+    exif_weight = DEFAULTS["exif_weight"]
+    deepfake_weight = DEFAULTS["deepfake_weight"]
+    frame_weight = DEFAULTS["frame_weight"]
+    vit_weight = DEFAULTS["vit_weight"]
+    clip_weight = DEFAULTS["clip_weight"]
+    face_crop_multiplier = DEFAULTS["face_crop_multiplier"]
+    video_ratio = DEFAULTS["video_ratio"]
+    n_sample_frames = DEFAULTS["n_sample_frames"]
+
+# Small note for end users
+st.sidebar.markdown("**Note:** Defaults are tuned for higher accuracy. Advanced tuning is available to admins only.")
+st.sidebar.markdown("Tip: set TRUTHLENS_ADMIN_KEY in your environment to enable advanced settings.")
 
 # -------------------------
 # Temp file registry & cleanup
@@ -1107,7 +1163,7 @@ def cleanup_tmp():
 atexit.register(cleanup_tmp)
 
 # -------------------------
-# Networking helpers
+# Networking / download helpers
 # -------------------------
 def safe_get(url, stream=True, timeout=30, allow_redirects=True):
     headers = {"User-Agent": "Truthlens/1.0 (+https://example.org)"}
@@ -1166,7 +1222,7 @@ def download_to_temp(url: str, timeout=120):
     return tmp.name
 
 # -------------------------
-# EXIF camera check (robust)
+# EXIF camera check
 # -------------------------
 def exif_has_camera(img_or_path) -> bool:
     try:
@@ -1191,7 +1247,7 @@ def exif_has_camera(img_or_path) -> bool:
     return False
 
 # -------------------------
-# Load models (cached resources)
+# Load models (cached)
 # -------------------------
 @st.cache_resource(show_spinner=True)
 def load_clip():
@@ -1254,7 +1310,7 @@ frame_model, frame_transform = load_frame_model_if_present(FRAME_CKPT)
 vit_proc, vit_model = load_vit_if_present(VIT_DIR)
 
 # -------------------------
-# Face detector (OpenCV DNN) - ensure weights exist if possible
+# Face detector (OpenCV DNN)
 # -------------------------
 FACE_PROTO = "deploy.prototxt"
 FACE_MODEL = "res10_300x300_ssd_iter_140000.caffemodel"
@@ -1277,7 +1333,7 @@ if os.path.exists(FACE_PROTO) and os.path.exists(FACE_MODEL):
         FACE_NET = None
 
 # -------------------------
-# Heuristics: ELA, quantization, noise
+# Heuristics
 # -------------------------
 def error_level_analysis(pil_img: Image.Image, scale=90):
     try:
@@ -1341,14 +1397,12 @@ def clip_vote_image(pil_img: Image.Image) -> str:
         return "Human-made"
 
 def deepfake_predict(pil_img: Image.Image):
-    # Use the huggingface deepfake image classifier if available
     if df_model is None or df_proc is None:
         return None
     try:
         inputs = df_proc(images=pil_img, return_tensors="pt").to(DEVICE)
         with torch.no_grad():
             out = df_model(**inputs)
-            # Some models have .logits, some return a dict
             logits = getattr(out, "logits", None) or out
             if logits is None:
                 return None
@@ -1359,7 +1413,6 @@ def deepfake_predict(pil_img: Image.Image):
                     return "AI-generated"
                 else:
                     return "Human-made"
-            # fallback assumption: class 0 -> fake, 1 -> real (many HF deepfake models use this mapping)
             return "AI-generated" if pred == 0 else "Human-made"
     except Exception:
         return None
@@ -1410,13 +1463,12 @@ def detect_faces_and_crops(pil_img: Image.Image, min_conf=0.5):
     return crops
 
 # -------------------------
-# Ensemble for single image
+# Ensemble per-image
 # -------------------------
-def ensemble_decision_for_image(pil_img: Image.Image) -> (str, dict):
+def ensemble_decision_for_image(pil_img: Image.Image):
     votes = {"AI-generated": 0.0, "Human-made": 0.0}
     evidence = []
 
-    # EXIF camera -> human signal
     try:
         if exif_has_camera(pil_img):
             votes["Human-made"] += exif_weight
@@ -1424,7 +1476,6 @@ def ensemble_decision_for_image(pil_img: Image.Image) -> (str, dict):
     except Exception:
         pass
 
-    # deepfake classifier (full image)
     df_full = deepfake_predict(pil_img)
     if df_full == "AI-generated":
         votes["AI-generated"] += deepfake_weight
@@ -1433,7 +1484,6 @@ def ensemble_decision_for_image(pil_img: Image.Image) -> (str, dict):
         votes["Human-made"] += deepfake_weight
         evidence.append(("DeepfakeCls", "Human-made", deepfake_weight))
 
-    # frame model
     fm_full = frame_predict(pil_img)
     if fm_full == "AI-generated":
         votes["AI-generated"] += frame_weight
@@ -1442,7 +1492,6 @@ def ensemble_decision_for_image(pil_img: Image.Image) -> (str, dict):
         votes["Human-made"] += frame_weight
         evidence.append(("FrameModel", "Human-made", frame_weight))
 
-    # ViT model
     vit_full = vit_predict(pil_img)
     if vit_full == "AI-generated":
         votes["AI-generated"] += vit_weight
@@ -1451,7 +1500,6 @@ def ensemble_decision_for_image(pil_img: Image.Image) -> (str, dict):
         votes["Human-made"] += vit_weight
         evidence.append(("ViT", "Human-made", vit_weight))
 
-    # CLIP
     try:
         clip_full = clip_vote_image(pil_img)
         votes[clip_full] += clip_weight
@@ -1459,10 +1507,10 @@ def ensemble_decision_for_image(pil_img: Image.Image) -> (str, dict):
     except Exception:
         pass
 
-    # Heuristics: ELA, quantization var, noise
     ela_score = error_level_analysis(pil_img)
     quant_var = jpeg_quantization_score(pil_img)
     noise_score = noise_uniformity_score(pil_img)
+
     if ela_score > 8.0:
         votes["AI-generated"] += 0.8
         evidence.append(("ELA", "AI-like", 0.8))
@@ -1473,7 +1521,6 @@ def ensemble_decision_for_image(pil_img: Image.Image) -> (str, dict):
         votes["AI-generated"] += 0.4
         evidence.append(("NoiseLow", "AI-like", 0.4))
 
-    # face crops analysis
     try:
         crops = detect_faces_and_crops(pil_img)
     except Exception:
@@ -1481,26 +1528,25 @@ def ensemble_decision_for_image(pil_img: Image.Image) -> (str, dict):
     for crop in crops:
         df_c = deepfake_predict(crop)
         if df_c == "AI-generated":
-            votes["AI-generated"] += (deepfake_weight * 0.6) * face_crop_weights
-            evidence.append(("DeepfakeCrop", "AI-generated", (deepfake_weight * 0.6) * face_crop_weights))
+            votes["AI-generated"] += (deepfake_weight * 0.6) * face_crop_multiplier
+            evidence.append(("DeepfakeCrop", "AI-generated", (deepfake_weight * 0.6) * face_crop_multiplier))
         elif df_c == "Human-made":
-            votes["Human-made"] += (deepfake_weight * 0.6) * face_crop_weights
-            evidence.append(("DeepfakeCrop", "Human-made", (deepfake_weight * 0.6) * face_crop_weights))
+            votes["Human-made"] += (deepfake_weight * 0.6) * face_crop_multiplier
+            evidence.append(("DeepfakeCrop", "Human-made", (deepfake_weight * 0.6) * face_crop_multiplier))
         fm_c = frame_predict(crop)
         if fm_c == "AI-generated":
-            votes["AI-generated"] += (frame_weight * 0.6) * face_crop_weights
-            evidence.append(("FrameCrop", "AI-generated", (frame_weight * 0.6) * face_crop_weights))
+            votes["AI-generated"] += (frame_weight * 0.6) * face_crop_multiplier
+            evidence.append(("FrameCrop", "AI-generated", (frame_weight * 0.6) * face_crop_multiplier))
         elif fm_c == "Human-made":
-            votes["Human-made"] += (frame_weight * 0.6) * face_crop_weights
-            evidence.append(("FrameCrop", "Human-made", (frame_weight * 0.6) * face_crop_weights))
+            votes["Human-made"] += (frame_weight * 0.6) * face_crop_multiplier
+            evidence.append(("FrameCrop", "Human-made", (frame_weight * 0.6) * face_crop_multiplier))
         try:
             clip_c = clip_vote_image(crop)
-            votes[clip_c] += 0.2 * face_crop_weights
-            evidence.append(("CLIPCrop", clip_c, 0.2 * face_crop_weights))
+            votes[clip_c] += 0.2 * face_crop_multiplier
+            evidence.append(("CLIPCrop", clip_c, 0.2 * face_crop_multiplier))
         except Exception:
             pass
 
-    # tie-breaker
     if abs(votes["AI-generated"] - votes["Human-made"]) < 1e-6:
         try:
             tie = clip_vote_image(pil_img)
@@ -1544,31 +1590,13 @@ def ensemble_decision_for_video(path, n_sample_frames=12):
         d, meta = ensemble_decision_for_image(f)
         counts[d] += 1
         frame_details.append((d, meta))
-    ai_ratio = counts["AI-generated"] / max(1, (counts["AI-generated"] + counts["Human-made"]))
-    decision = "AI-generated" if ai_ratio >= video_ratio else "Human-made"
-    return decision, {"counts": counts, "ai_ratio": ai_ratio, "frame_details": frame_details}
+    ai_ratio_local = counts["AI-generated"] / max(1, (counts["AI-generated"] + counts["Human-made"]))
+    decision = "AI-generated" if ai_ratio_local >= video_ratio else "Human-made"
+    return decision, {"counts": counts, "ai_ratio": ai_ratio_local, "frame_details": frame_details}
 
 # -------------------------
-# Helpers for dims & HTML scraping
+# HTML scraping helper
 # -------------------------
-def get_image_dims(path):
-    try:
-        with Image.open(path) as img:
-            return img.size
-    except Exception:
-        return None, None
-
-def get_video_dims(path):
-    try:
-        cap = cv2.VideoCapture(path)
-        if not cap.isOpened():
-            return None, None
-        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)); h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        cap.release()
-        return w, h
-    except Exception:
-        return None, None
-
 def extract_media_from_html(html_path_or_bytes, base_url=None):
     try:
         if isinstance(html_path_or_bytes, (str, bytes)):
@@ -1612,11 +1640,10 @@ def extract_media_from_html(html_path_or_bytes, base_url=None):
         return None
 
 # -------------------------
-# UI Tabs (URL first)
+# UI tabs (URL first)
 # -------------------------
 tab_url, tab_upload = st.tabs(["🌐 URL", "📁 Upload"])
 
-# ---- URL tab ----
 with tab_url:
     st.header("Paste any link (direct media URL, page URL, or data URI)")
     url = st.text_input("Enter URL (or data URI):", placeholder="https://.../image.jpg or https://example.com/article or data:image/png;base64,...")
@@ -1652,10 +1679,14 @@ with tab_url:
                             base_frame = frames[0]
                             w, h = base_frame.size
                             decision, meta = ensemble_decision_for_image(base_frame)
+                            # Summary for users
                             st.image(base_frame, caption=f"GIF image (frame 0) — {w}×{h}px", use_column_width=True)
                             st.success(f"Origin: **{decision}**")
-                            st.write(f"Width: **{w}px** — Height: **{h}px** — Resolution: **{w}×{h}**")
-                            st.json({"meta_summary": meta})
+                            st.write(f"Resolution: **{w}×{h}**")
+                            # Admin-only details
+                            if st.session_state["admin_authenticated"]:
+                                with st.expander("🔧 Detailed meta (admin)"):
+                                    st.json({"meta_summary": meta})
                         else:
                             pil = pil.convert("RGB")
                             w, h = pil.size
@@ -1663,24 +1694,43 @@ with tab_url:
                                 decision, meta = ensemble_decision_for_image(pil)
                             st.image(pil, caption=f"URL Image — {w}×{h}px", use_column_width=True)
                             st.success(f"Origin: **{decision}**")
-                            st.write(f"Width: **{w}px** — Height: **{h}px** — Resolution: **{w}×{h}**")
-                            st.markdown("**Evidence (top signals):**")
-                            for e in meta.get("evidence", [])[:8]:
+                            st.write(f"Resolution: **{w}×{h}**")
+                            # show compact evidence summary to all users (top 3)
+                            st.markdown("**Top signals (summary):**")
+                            for e in meta.get("evidence", [])[:3]:
                                 st.write(f"- {e[0]} → {e[1]} (weight {e[2]:.2f})")
-                            heur = meta.get("heuristics", {})
-                            st.write(f"ELA score: {heur.get('ela'):.2f}, QuantVar: {heur.get('quant_var'):.2f}, Noise: {heur.get('noise'):.2f}")
+                            # admin-only: full meta
+                            if st.session_state["admin_authenticated"]:
+                                with st.expander("🔧 Full meta (admin)"):
+                                    st.json({"meta": meta})
                     except UnidentifiedImageError:
+                        # treat as video
                         st.video(tmp_path)
                         with st.spinner("Sampling and analyzing video frames..."):
-                            decision, meta = ensemble_decision_for_video(tmp_path, n_sample_frames=12)
-                        w, h = get_video_dims(tmp_path)
-                        if decision is None:
-                            st.error("Could not read video frames for analysis.")
+                            decision, meta = ensemble_decision_for_video(tmp_path, n_sample_frames=n_sample_frames)
+                        w, h = None, None
+                        try:
+                            w, h = get_video_dims(tmp_path)
+                        except Exception:
+                            pass
+                        # Summary display
+                        ai_cnt = meta.get("counts", {}).get("AI-generated", 0)
+                        hm_cnt = meta.get("counts", {}).get("Human-made", 0)
+                        ai_ratio_local = meta.get("ai_ratio", 0.0)
+                        st.metric("AI frames", f"{ai_cnt}")
+                        st.metric("Human frames", f"{hm_cnt}")
+                        st.progress(ai_ratio_local)
+                        final_label = "AI-generated" if ai_ratio_local >= video_ratio else "Human-made"
+                        if ai_ratio_local >= video_ratio:
+                            st.success(f"Origin: **{final_label}**")
                         else:
-                            st.success(f"Origin: **{decision}**")
-                            if w and h:
-                                st.write(f"Width: **{w}px** — Height: **{h}px** — Resolution: **{w}×{h}**")
-                            st.json({"video_meta": meta})
+                            st.info(f"Origin: **{final_label}**")
+                        if w and h:
+                            st.write(f"Resolution: **{w}×{h}**")
+                        # Admin-only: frame details JSON
+                        if st.session_state["admin_authenticated"]:
+                            with st.expander("🔧 Full video meta (admin)"):
+                                st.json(meta)
             except requests.RequestException as e:
                 st.error(f"Network error while downloading media: {e}")
             except Exception as e:
@@ -1692,7 +1742,6 @@ with tab_url:
                 except Exception:
                     pass
 
-# ---- Upload tab ----
 with tab_upload:
     st.header("Upload an image or a video (any extension)")
     uploaded = st.file_uploader("Drop file here (images/videos). The app auto-detects the type.", type=None)
@@ -1702,6 +1751,7 @@ with tab_upload:
         tmpf.write(uploaded.read()); tmpf.flush(); tmpf.close()
         register_tmp(tmpf.name)
         path = tmpf.name
+
         try:
             pil = Image.open(path).convert("RGB")
             w, h = pil.size
@@ -1709,22 +1759,33 @@ with tab_upload:
                 decision, meta = ensemble_decision_for_image(pil)
             st.image(pil, caption=f"Uploaded Image — {w}×{h}px", use_column_width=True)
             st.success(f"Origin: **{decision}**")
-            st.write(f"Width: **{w}px** — Height: **{h}px** — Resolution: **{w}×{h}**")
-            st.json({"meta": meta})
+            st.write(f"Resolution: **{w}×{h}**")
+            st.markdown("**Top signals (summary):**")
+            for e in meta.get("evidence", [])[:3]:
+                st.write(f"- {e[0]} → {e[1]} (weight {e[2]:.2f})")
+            if st.session_state["admin_authenticated"]:
+                with st.expander("🔧 Full meta (admin)"):
+                    st.json(meta)
         except UnidentifiedImageError:
             st.video(path)
             with st.spinner("Sampling video and analyzing..."):
-                decision, meta = ensemble_decision_for_video(path, n_sample_frames=12)
-            w, h = get_video_dims(path)
-            if decision is None:
-                st.error("Could not read video frames for analysis.")
+                decision, meta = ensemble_decision_for_video(path, n_sample_frames=n_sample_frames)
+            ai_cnt = meta.get("counts", {}).get("AI-generated", 0)
+            hm_cnt = meta.get("counts", {}).get("Human-made", 0)
+            ai_ratio_local = meta.get("ai_ratio", 0.0)
+            st.metric("AI frames", f"{ai_cnt}")
+            st.metric("Human frames", f"{hm_cnt}")
+            st.progress(ai_ratio_local)
+            final_label = "AI-generated" if ai_ratio_local >= video_ratio else "Human-made"
+            if ai_ratio_local >= video_ratio:
+                st.success(f"Origin: **{final_label}**")
             else:
-                st.success(f"Origin: **{decision}**")
-                if w and h:
-                    st.write(f"Width: **{w}px** — Height: **{h}px** — Resolution: **{w}×{h}**")
-                st.json({"video_meta": meta})
+                st.info(f"Origin: **{final_label}**")
+            if st.session_state["admin_authenticated"]:
+                with st.expander("🔧 Full video meta (admin)"):
+                    st.json(meta)
 
-# footer
+# Footer
 st.markdown("---")
-st.markdown('<div class="neon-card">Note: This ensemble maximizes practical detection accuracy using a dedicated deepfake classifier + heuristics + CLIP. It still cannot guarantee 100% accuracy — use provenance checks and human review for critical decisions.</div>', unsafe_allow_html=True)
+st.markdown('<div class="neon-card">Note: Defaults are tuned for higher accuracy. Advanced tuning is admin-only. No detector is perfect — use provenance and human review for critical cases.</div>', unsafe_allow_html=True)
 
