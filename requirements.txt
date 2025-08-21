@@ -1,10 +1,11 @@
-
 streamlit
 torch
 torchvision
 transformers
+timm
 Pillow
 numpy
 opencv-python-headless
 requests
-yt-dlp
+youtube_dl
+pytube
