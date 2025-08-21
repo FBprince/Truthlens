@@ -1,13 +1,10 @@
+
 streamlit
 torch
 torchvision
-torchaudio
 transformers
 Pillow
-requests
-beautifulsoup4
-lxml
-opencv-python-headless
 numpy
-scikit-learn
-timm
+opencv-python-headless
+requests
+yt-dlp
