@@ -1002,15 +1002,6 @@
 
 
 
-
-# truthlens_ai_multiplatform.py
-"""
-Truthlens-AI Detector (Multi-platform)
-- Upload or paste URL (image/video from TikTok, YouTube, Instagram, direct links)
-- Outputs: AI-generated or Human-made + Width × Height
-- Clean display without extra debug
-"""
-
 import os
 import io
 import tempfile
@@ -1019,17 +1010,19 @@ from urllib.parse import urlparse
 import streamlit as st
 import requests
 import numpy as np
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ExifTags, UnidentifiedImageError
 
 import torch
-from transformers import CLIPProcessor, CLIPModel
+from transformers import CLIPProcessor, CLIPModel, AutoImageProcessor, AutoModelForImageClassification
 import cv2
 import timm
 from torchvision import transforms
 
-# Multi-platform downloader
-from pytube import YouTube
-import yt_dlp
+# Optional: yt-dlp for multi-platform video URLs
+try:
+    import yt_dlp
+except ImportError:
+    yt_dlp = None
 
 # -------------------------
 # App config / UI
@@ -1046,17 +1039,49 @@ h1, h2, h3 { color:#00f9ff !important; text-shadow: 0 0 8px #00f9ff; }
 """, unsafe_allow_html=True)
 
 st.title("🔎 Truthlens-AI Detector")
-st.markdown('<div class="neon-card">Uploads or paste URL. Output: <b>AI-generated</b> or <b>Human-made</b> + resolution.</div>', unsafe_allow_html=True)
+st.markdown('<div class="neon-card">Paste URL or upload image/video. Output: AI-generated or Human-made plus resolution.</div>', unsafe_allow_html=True)
 
 # -------------------------
-# Device & models
+# Device & model config
 # -------------------------
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-CLIP_REPO = "openai/clip-vit-base-patch32"
-AI_PROMPTS = ["an AI-generated image, synthetic, digital rendering","a computer-generated picture created by an AI model"]
-HUMAN_PROMPTS = ["a real photograph taken by a camera","an authentic, real-world image captured by a person"]
 
-@st.cache_resource
+CLIP_REPO = os.environ.get("CLIP_REPO", "openai/clip-vit-base-patch32")
+FRAME_CKPT = os.environ.get("FRAME_CKPT", "")
+VIT_DIR = os.environ.get("VIT_DIR", "")
+DEEPFAKE_MODEL_ID = os.environ.get("DEEPFAKE_MODEL_ID", "")
+
+AI_PROMPTS = ["an AI-generated image, synthetic, digital rendering", "a computer-generated picture created by an AI model"]
+HUMAN_PROMPTS = ["a real photograph taken by a camera", "an authentic, real-world image captured by a person"]
+
+# -------------------------
+# Helpers
+# -------------------------
+def exif_has_camera(img_or_path) -> bool:
+    try:
+        if isinstance(img_or_path, (bytes, bytearray)):
+            img = Image.open(io.BytesIO(img_or_path))
+        elif isinstance(img_or_path, str) and os.path.exists(img_or_path):
+            img = Image.open(img_or_path)
+        elif isinstance(img_or_path, Image.Image):
+            img = img_or_path
+        else:
+            return False
+        exif = getattr(img, "_getexif", lambda: None)()
+        if not exif:
+            return False
+        for tag_id, value in exif.items():
+            tag = ExifTags.TAGS.get(tag_id, tag_id)
+            if tag in ("Make", "Model", "LensModel", "CreatorTool") and value:
+                return True
+    except Exception:
+        return False
+    return False
+
+# -------------------------
+# Load models (cached)
+# -------------------------
+@st.cache_resource(show_spinner=True)
 def load_clip():
     proc = CLIPProcessor.from_pretrained(CLIP_REPO)
     model = CLIPModel.from_pretrained(CLIP_REPO).to(DEVICE).eval()
@@ -1070,127 +1095,175 @@ def load_clip():
 clip_proc, clip_model, TEXT_FEATS, N_AI, N_HUM = load_clip()
 
 # -------------------------
-# Helpers
+# Download multi-platform video using yt-dlp
 # -------------------------
-def clip_vote_image(pil_img):
-    try:
-        inputs = clip_proc(images=pil_img, return_tensors="pt").to(DEVICE)
-        with torch.no_grad():
-            img_feats = clip_model.get_image_features(**inputs)
-        img_feats = img_feats / img_feats.norm(p=2, dim=-1, keepdim=True)
-        logits = img_feats @ TEXT_FEATS.T
-        logits = logits.squeeze(0).cpu()
-        ai_score = logits[:N_AI].mean().item()
-        hm_score = logits[N_AI:N_AI+N_HUM].mean().item()
-        return "AI-generated" if ai_score >= hm_score else "Human-made"
-    except Exception:
-        return "Human-made"
+def download_media(url):
+    if yt_dlp is None:
+        raise RuntimeError("yt-dlp is required for multi-platform URLs.")
+    tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+    ydl_opts = {
+        'outtmpl': tmp_file.name,
+        'format': 'best[ext=mp4]/best',
+        'quiet': True,
+        'noplaylist': True
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info_dict = ydl.extract_info(url, download=True)
+    return tmp_file.name
 
-def ensemble_decision_for_image(pil_img):
-    return clip_vote_image(pil_img)
+# -------------------------
+# CLIP image vote
+# -------------------------
+def clip_vote_image(pil_img: Image.Image) -> str:
+    inputs = clip_proc(images=pil_img, return_tensors="pt").to(DEVICE)
+    with torch.no_grad():
+        img_feats = clip_model.get_image_features(**inputs)
+    img_feats = img_feats / img_feats.norm(p=2, dim=-1, keepdim=True)
+    logits = img_feats @ TEXT_FEATS.T
+    logits = logits.squeeze(0).cpu()
+    ai_score = logits[:N_AI].mean().item()
+    hm_score = logits[N_AI:].mean().item()
+    return "AI-generated" if ai_score >= hm_score else "Human-made"
 
+# -------------------------
+# Video frame sampling
+# -------------------------
 def sample_frames_from_video_opencv(path, n_frames=12):
     cap = cv2.VideoCapture(path)
     if not cap.isOpened():
         return []
-    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
-    if total <= 0:
-        cap.release()
-        return []
-    indices = np.linspace(0, max(0, total - 1), num=min(n_frames, total)).astype(int)
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    indices = np.linspace(0, max(0,total-1), num=min(n_frames,total)).astype(int)
     frames = []
     for idx in indices:
         cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx))
         ok, frame = cap.read()
-        if ok:
-            frames.append(Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
+        if not ok:
+            continue
+        frames.append(Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
     cap.release()
     return frames
 
-def ensemble_decision_for_video(path, n_sample_frames=12):
-    frames = sample_frames_from_video_opencv(path, n_frames=n_sample_frames)
+# -------------------------
+# Ensemble decision for image
+# -------------------------
+def ensemble_decision_for_image(pil_img: Image.Image) -> str:
+    return clip_vote_image(pil_img)
+
+# -------------------------
+# Ensemble decision for video
+# -------------------------
+def ensemble_decision_for_video(path):
+    frames = sample_frames_from_video_opencv(path)
     if not frames:
         return None
-    votes = {"AI-generated":0,"Human-made":0}
-    for f in frames:
-        votes[ensemble_decision_for_image(f)] +=1
-    return "AI-generated" if votes["AI-generated"] >= votes["Human-made"] else "Human-made"
+    votes = [ensemble_decision_for_image(f) for f in frames]
+    ai_count = votes.count("AI-generated")
+    hm_count = votes.count("Human-made")
+    return "AI-generated" if ai_count >= hm_count else "Human-made"
 
-def get_dims(path, is_image=True):
+# -------------------------
+# Get media dimensions
+# -------------------------
+def get_image_dims(path):
     try:
-        if is_image:
-            with Image.open(path) as img: return img.size
-        else:
-            cap = cv2.VideoCapture(path)
-            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)); h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            cap.release()
-            return w,h
+        with Image.open(path) as img:
+            return img.size
     except Exception:
-        return None,None
+        return None, None
 
-def download_media(url):
-    tmpf = tempfile.NamedTemporaryFile(delete=False)
-    if "tiktok.com" in url or "instagram.com" in url or "youtube.com" in url:
-        ydl_opts = {'outtmpl': tmpf.name+'.%(ext)s','format':'mp4','quiet':True}
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            tmpf.name = tmpf.name + '.' + info.get('ext','mp4')
-    else:
-        r = requests.get(url, stream=True, timeout=240)
-        r.raise_for_status()
-        tmpf.write(r.content)
-        tmpf.flush()
-    tmpf.close()
-    return tmpf.name
+def get_video_dims(path):
+    try:
+        cap = cv2.VideoCapture(path)
+        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
+        return w, h
+    except Exception:
+        return None, None
 
 # -------------------------
-# UI Tabs
+# UI: URL first
 # -------------------------
-tab_url, tab_upload = st.tabs(["🌐 URL","📁 Upload"])
+tab_url, tab_upload = st.tabs(["🌐 URL", "📁 Upload"])
 
 with tab_url:
-    st.header("Paste a direct or platform video/image URL")
-    url = st.text_input("Enter URL:")
+    st.header("Paste a direct video/image URL")
+    url = st.text_input("Enter URL")
     if st.button("Analyze URL"):
         if not url:
-            st.error("Please paste a URL to analyze.")
+            st.error("Please enter a URL")
         else:
+            tmp_path = None
             try:
-                path = download_media(url)
+                # Download video/image if platform URL
+                if any(x in url for x in ["tiktok.com", "youtube.com", "youtu.be", "instagram.com"]):
+                    tmp_path = download_media(url)
+                else:
+                    # Otherwise download raw file
+                    r = requests.get(url, stream=True, timeout=240)
+                    r.raise_for_status()
+                    suffix = os.path.splitext(urlparse(url).path)[1] or ""
+                    tmpf = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+                    for chunk in r.iter_content(chunk_size=1024*1024):
+                        if chunk:
+                            tmpf.write(chunk)
+                    tmpf.flush(); tmpf.close()
+                    tmp_path = tmpf.name
+
+                # Try image
                 try:
-                    pil = Image.open(path).convert("RGB")
-                    w,h = pil.size
+                    pil = Image.open(tmp_path).convert("RGB")
+                    w, h = pil.size
                     decision = ensemble_decision_for_image(pil)
-                    st.image(pil, caption=f"{w}×{h}px", use_column_width=True)
-                    st.success(f"Origin: **{decision}**")
-                    st.write(f"Width: **{w}px** — Height: **{h}px** — Resolution: **{w}×{h}**")
+                    st.image(pil, caption=f"Image — {w}×{h}px", use_column_width=True)
+                    st.success(f"Origin: {decision}")
+                    st.write(f"Width: {w}px — Height: {h}px — Resolution: {w}×{h}")
                 except UnidentifiedImageError:
-                    decision = ensemble_decision_for_video(path)
-                    w,h = get_dims(path,is_image=False)
-                    st.video(path)
-                    if decision: st.success(f"Origin: **{decision}**")
-                    if w and h: st.write(f"Width: **{w}px** — Height: **{h}px** — Resolution: **{w}×{h}**")
+                    # Treat as video
+                    st.video(tmp_path)
+                    decision = ensemble_decision_for_video(tmp_path)
+                    w, h = get_video_dims(tmp_path)
+                    if decision is None:
+                        st.error("Could not read video frames for analysis.")
+                    else:
+                        st.success(f"Origin: {decision}")
+                        if w and h:
+                            st.write(f"Width: {w}px — Height: {h}px — Resolution: {w}×{h}")
             except Exception as e:
-                st.error(f"Could not read media: {e}")
+                st.error(f"Failed to analyze URL: {e}")
+            finally:
+                try:
+                    if tmp_path and os.path.exists(tmp_path):
+                        os.remove(tmp_path)
+                except Exception:
+                    pass
 
 with tab_upload:
-    st.header("Upload image or video")
-    uploaded = st.file_uploader("Drop file here.", type=None)
+    st.header("Upload an image or video")
+    uploaded = st.file_uploader("Drop file here", type=None)
     if uploaded:
         suffix = os.path.splitext(uploaded.name)[1] or ""
         tmpf = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-        tmpf.write(uploaded.read()); tmpf.close()
+        tmpf.write(uploaded.read()); tmpf.flush(); tmpf.close()
         path = tmpf.name
         try:
             pil = Image.open(path).convert("RGB")
-            w,h = pil.size
+            w, h = pil.size
             decision = ensemble_decision_for_image(pil)
-            st.image(pil, caption=f"{w}×{h}px", use_column_width=True)
-            st.success(f"Origin: **{decision}**")
-            st.write(f"Width: **{w}px** — Height: **{h}px** — Resolution: **{w}×{h}**")
+            st.image(pil, caption=f"Uploaded Image — {w}×{h}px", use_column_width=True)
+            st.success(f"Origin: {decision}")
+            st.write(f"Width: {w}px — Height: {h}px — Resolution: {w}×{h}")
         except UnidentifiedImageError:
-            decision = ensemble_decision_for_video(path)
-            w,h = get_dims(path,is_image=False)
             st.video(path)
-            if decision: st.success(f"Origin: **{decision}**")
-            if w and h: st.write(f"Width: **{w}px** — Height: **{h}px** — Resolution: **{w}×{h}**")
+            decision = ensemble_decision_for_video(path)
+            w, h = get_video_dims(path)
+            if decision is None:
+                st.error("Could not read video frames for analysis.")
+            else:
+                st.success(f"Origin: {decision}")
+                if w and h:
+                    st.write(f"Width: {w}px — Height: {h}px — Resolution: {w}×{h}")
+
+st.markdown("---")
+st.markdown('<div class="neon-card">Note: Ensemble maximizes practical detection accuracy. Combine with human review for critical decisions.</div>', unsafe_allow_html=True)
