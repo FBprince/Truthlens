@@ -9,7 +9,8 @@ opencv-python-headless
 requests
 youtube_dl
 pytube
-yt_dlp
+pytube3
+
 
 
 
