@@ -1005,191 +1005,239 @@
 
 
 
+import os
+import io
+import tempfile
+from urllib.parse import urlparse
+
 import streamlit as st
 import requests
-import cv2
 import numpy as np
-from PIL import Image
-from io import BytesIO
+from PIL import Image, ExifTags, UnidentifiedImageError
+
 import torch
-from transformers import AutoProcessor, AutoModelForImageClassification, CLIPProcessor, CLIPModel
-import tempfile
-import os
-from urllib.parse import urlparse
+from transformers import CLIPProcessor, CLIPModel, AutoImageProcessor, AutoModelForImageClassification
+
+import cv2
+import timm
+from torchvision import transforms
 import yt_dlp
 
-# -----------------------------
-# Hugging Face API Key
-# -----------------------------
-HF_API_KEY = "YOUR_API_KEY_HERE"  # replace with your Hugging Face token
+# -------------------------
+# App UI config
+# -------------------------
+st.set_page_config(page_title="Truthlens-AI Detector", layout="wide", page_icon="🔎")
+st.markdown("""
+<style>
+html, body, [data-testid="stAppViewContainer"] {
+  background: radial-gradient(circle at 10% 10%, #001021, #000000) !important;
+}
+h1, h2, h3 { color:#00f9ff !important; text-shadow: 0 0 8px #00f9ff; }
+.neon-card { border-radius:12px; padding:12px; background: rgba(6,10,20,0.6); box-shadow:0 8px 30px rgba(0,120,255,0.06); color:#dffaff; }
+</style>
+""", unsafe_allow_html=True)
 
-# -----------------------------
-# Streamlit App Config
-# -----------------------------
-st.set_page_config(page_title="Truthlens-AI Detector", layout="centered")
-st.title("🕵 Truthlens-AI Detector")
-st.write("Detect whether an **Image / Video / URL** is AI-generated or Human-made.")
+st.title("🔎 Truthlens-AI Detector")
+st.markdown('<div class="neon-card">Paste URL or upload media. Output: <b>AI-generated</b> or <b>Human-made</b> plus resolution.</div>', unsafe_allow_html=True)
 
-# -----------------------------
-# Load Hugging Face Models (Cached)
-# -----------------------------
+# -------------------------
+# Device & models
+# -------------------------
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+CLIP_REPO = os.environ.get("CLIP_REPO", "openai/clip-vit-base-patch32")
+AI_PROMPTS = ["an AI-generated image, synthetic, digital rendering", "a computer-generated picture created by an AI model"]
+HUMAN_PROMPTS = ["a real photograph taken by a camera", "an authentic, real-world image captured by a person"]
+
+# -------------------------
+# Helper: EXIF check
+# -------------------------
+def exif_has_camera(img_or_path) -> bool:
+    try:
+        if isinstance(img_or_path, (bytes, bytearray)):
+            img = Image.open(io.BytesIO(img_or_path))
+        elif isinstance(img_or_path, str) and os.path.exists(img_or_path):
+            img = Image.open(img_or_path)
+        elif isinstance(img_or_path, Image.Image):
+            img = img_or_path
+        else:
+            return False
+        exif = getattr(img, "_getexif", lambda: None)()
+        if not exif:
+            return False
+        for tag_id, value in exif.items():
+            tag = ExifTags.TAGS.get(tag_id, tag_id)
+            if tag in ("Make", "Model", "LensModel", "CreatorTool") and value:
+                return True
+    except Exception:
+        return False
+    return False
+
+# -------------------------
+# Load models
+# -------------------------
 @st.cache_resource
-def load_models():
-    # CLIP
-    clip_proc = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
-    clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16").eval()
-    
-    # ViT classifier for AI vs Human detection
-    vit_proc = AutoProcessor.from_pretrained("microsoft/vision-base-ai-vs-human")
-    vit_model = AutoModelForImageClassification.from_pretrained(
-        "microsoft/vision-base-ai-vs-human"
-    ).eval()
-    
-    return clip_proc, clip_model, vit_proc, vit_model
+def load_clip():
+    proc = CLIPProcessor.from_pretrained(CLIP_REPO)
+    model = CLIPModel.from_pretrained(CLIP_REPO).to(DEVICE).eval()
+    texts = AI_PROMPTS + HUMAN_PROMPTS
+    inputs = proc(text=texts, return_tensors="pt", padding=True).to(DEVICE)
+    with torch.no_grad():
+        text_feats = model.get_text_features(**inputs)
+    text_feats = text_feats / text_feats.norm(p=2, dim=-1, keepdim=True)
+    return proc, model, text_feats, len(AI_PROMPTS), len(HUMAN_PROMPTS)
 
-clip_proc, clip_model, vit_proc, vit_model = load_models()
+@st.cache_resource
+def load_vit():
+    proc = AutoImageProcessor.from_pretrained("google/vit-base-patch16-224-in21k")
+    mdl = AutoModelForImageClassification.from_pretrained("google/vit-base-patch16-224-in21k").to(DEVICE).eval()
+    return proc, mdl
 
-# -----------------------------
-# Helper Functions
-# -----------------------------
-def detect_media_ai_or_human(pil_image):
+clip_proc, clip_model, TEXT_FEATS, N_AI, N_HUM = load_clip()
+vit_proc, vit_model = load_vit()
+
+# -------------------------
+# Detection helpers
+# -------------------------
+def clip_vote_image(pil_img):
+    inputs = clip_proc(images=pil_img, return_tensors="pt").to(DEVICE)
+    with torch.no_grad():
+        img_feats = clip_model.get_image_features(**inputs)
+    img_feats = img_feats / img_feats.norm(p=2, dim=-1, keepdim=True)
+    logits = img_feats @ TEXT_FEATS.T
+    logits = logits.squeeze(0).cpu()
+    ai_score = logits[:N_AI].mean().item()
+    hm_score = logits[N_AI:N_AI+N_HUM].mean().item()
+    return "AI-generated" if ai_score >= hm_score else "Human-made"
+
+def vit_predict(pil_img):
+    inputs = vit_proc(images=pil_img, return_tensors="pt").to(DEVICE)
+    with torch.no_grad():
+        out = vit_model(**inputs)
+    pred = int(torch.argmax(out.logits, dim=-1).cpu())
+    return "AI-generated" if pred == 0 else "Human-made"
+
+def ensemble_decision_for_image(pil_img):
     votes = {"AI-generated": 0.0, "Human-made": 0.0}
-    
-    # --- ViT Model ---
+    if exif_has_camera(pil_img):
+        votes["Human-made"] += 3.0
     try:
-        inputs = vit_proc(images=pil_image, return_tensors="pt")
-        with torch.no_grad():
-            out = vit_model(**inputs)
-            pred = int(torch.argmax(out.logits, dim=-1).item())
-            votes["AI-generated" if pred == 0 else "Human-made"] += 1.5
-    except Exception:
+        votes[clip_vote_image(pil_img)] += 1.0
+    except:
         pass
-    
-    # --- CLIP Semantic check ---
     try:
-        prompts = ["AI-generated image", "Human-made image"]
-        inputs = clip_proc(text=prompts, images=pil_image, return_tensors="pt", padding=True)
-        with torch.no_grad():
-            img_features = clip_model.get_image_features(**inputs).detach()
-            text_features = clip_model.get_text_features(**inputs).detach()
-            img_features /= img_features.norm(p=2, dim=-1, keepdim=True)
-            text_features /= text_features.norm(p=2, dim=-1, keepdim=True)
-            logits = (img_features @ text_features.T).squeeze(0)
-            clip_label = "AI-generated" if logits[0] > logits[1] else "Human-made"
-            votes[clip_label] += 1.0
-    except Exception:
+        votes[vit_predict(pil_img)] += 1.5
+    except:
         pass
-    
     return "AI-generated" if votes["AI-generated"] > votes["Human-made"] else "Human-made"
 
-def get_video_frames(path, n_frames=12):
+# -------------------------
+# Video helpers
+# -------------------------
+def sample_frames(path, n_frames=12):
     cap = cv2.VideoCapture(path)
     if not cap.isOpened():
         return []
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    if total <= 0:
-        cap.release()
-        return []
-    indices = np.linspace(0, max(0,total-1), num=min(n_frames,total)).astype(int)
+    indices = np.linspace(0, max(0,total-1), min(n_frames,total)).astype(int)
     frames = []
     for idx in indices:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx))
+        cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
         ret, frame = cap.read()
-        if not ret:
-            continue
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frames.append(Image.fromarray(frame_rgb))
+        if ret:
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frames.append(Image.fromarray(frame_rgb))
     cap.release()
     return frames
 
-def detect_video_ai_or_human(path):
-    frames = get_video_frames(path)
+def ensemble_decision_for_video(path):
+    frames = sample_frames(path)
     if not frames:
-        return "Unknown"
-    votes = {"AI-generated":0, "Human-made":0}
+        return None
+    votes = {"AI-generated": 0, "Human-made": 0}
     for f in frames:
-        label = detect_media_ai_or_human(f)
-        votes[label] += 1
+        d = ensemble_decision_for_image(f)
+        votes[d] += 1
     return "AI-generated" if votes["AI-generated"] >= votes["Human-made"] else "Human-made"
 
-def download_media_from_url(url):
-    """Handles direct URLs or platforms (TikTok/YouTube/Instagram) using yt-dlp"""
-    parsed = urlparse(url)
-    suffix = os.path.splitext(parsed.path)[1] or ".mp4"
-    
-    tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-    tmp_file.close()
-    
-    if any(domain in url.lower() for domain in ["youtube.com","youtu.be","tiktok.com","instagram.com"]):
-        ydl_opts = {
-            "outtmpl": tmp_file.name,
-            "quiet": True,
-            "no_warnings": True,
-            "format": "mp4",
-        }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-    else:
-        r = requests.get(url, stream=True, timeout=60)
-        r.raise_for_status()
-        with open(tmp_file.name, "wb") as f:
-            for chunk in r.iter_content(1024*1024):
-                f.write(chunk)
-    return tmp_file.name
-
-# -----------------------------
-# Tabs
-# -----------------------------
-tab1, tab2 = st.tabs(["🌐 Paste URL / Link", "📂 Upload Media"])
-
-# -----------------------------
-# Tab 1: URL
-# -----------------------------
-with tab1:
-    url_input = st.text_input("Paste any Image/Video URL (TikTok, YouTube, Instagram supported):")
-    if st.button("Analyze URL"):
-        if url_input:
-            try:
-                media_path = download_media_from_url(url_input)
-                try:
-                    image = Image.open(media_path).convert("RGB")
-                    w,h = image.size
-                    st.image(image, caption=f"Image ({w}x{h})", use_column_width=True)
-                    label = detect_media_ai_or_human(image)
-                    st.success(f"Result: **{label}** — Resolution: {w}×{h}")
-                except:
-                    cap = cv2.VideoCapture(media_path)
-                    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                    cap.release()
-                    st.video(media_path)
-                    label = detect_video_ai_or_human(media_path)
-                    st.success(f"Result: **{label}** — Resolution: {w}×{h}")
-            except Exception as e:
-                st.error(f"Failed to analyze URL: {e}")
-
-# -----------------------------
-# Tab 2: Upload Media
-# -----------------------------
-with tab2:
-    uploaded_file = st.file_uploader("Upload an Image or Video", type=["jpg","jpeg","png","mp4","avi","mov","mkv"])
-    if uploaded_file is not None:
-        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[1])
-        tmp_file.write(uploaded_file.read())
-        tmp_file.flush()
-        tmp_file.close()
-        
-        try:
-            image = Image.open(tmp_file.name).convert("RGB")
-            w,h = image.size
-            st.image(image, caption=f"Image ({w}x{h})", use_column_width=True)
-            label = detect_media_ai_or_human(image)
-            st.success(f"Result: **{label}** — Resolution: {w}×{h}")
-        except:
-            cap = cv2.VideoCapture(tmp_file.name)
+# -------------------------
+# Utils
+# -------------------------
+def get_dims(path):
+    try:
+        if path.lower().endswith(('.mp4','.mov')):
+            cap = cv2.VideoCapture(path)
             w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             cap.release()
-            st.video(tmp_file.name)
-            label = detect_video_ai_or_human(tmp_file.name)
-            st.success(f"Result: **{label}** — Resolution: {w}×{h}")
+            return w,h
+        else:
+            with Image.open(path) as img:
+                return img.size
+    except:
+        return None,None
+
+def download_media(url):
+    suffix = os.path.splitext(urlparse(url).path)[1] or ""
+    tmpf = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    if any(x in url.lower() for x in ['youtube.com','youtu.be','tiktok.com','instagram.com']):
+        ydl_opts = {'outtmpl': tmpf.name, 'format':'bestvideo+bestaudio/best'}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+        return tmpf.name
+    else:
+        r = requests.get(url, stream=True, timeout=120)
+        r.raise_for_status()
+        for chunk in r.iter_content(1024*1024):
+            if chunk: tmpf.write(chunk)
+        tmpf.flush(); tmpf.close()
+        return tmpf.name
+
+# -------------------------
+# UI Tabs
+# -------------------------
+tab_url, tab_upload = st.tabs(["🌐 URL", "📁 Upload"])
+
+with tab_url:
+    st.header("Paste a direct image/video URL or multi-platform link")
+    url = st.text_input("Enter URL:")
+    if st.button("Analyze URL") and url:
+        try:
+            path = download_media(url)
+            try:
+                pil = Image.open(path).convert("RGB")
+                decision = ensemble_decision_for_image(pil)
+            except:
+                decision = ensemble_decision_for_video(path)
+            w,h = get_dims(path)
+            if decision is None:
+                st.error("Could not read media.")
+            else:
+                st.success(f"Origin: **{decision}**")
+                if w and h: st.write(f"Width: **{w}px** — Height: **{h}px** — Resolution: **{w}×{h}**")
+        except Exception as e:
+            st.error(f"Failed: {e}")
+
+with tab_upload:
+    st.header("Upload an image or video")
+    uploaded = st.file_uploader("Drop file here", type=None)
+    if uploaded:
+        suffix = os.path.splitext(uploaded.name)[1] or ""
+        tmpf = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        tmpf.write(uploaded.read()); tmpf.flush(); tmpf.close()
+        path = tmpf.name
+        try:
+            pil = Image.open(path).convert("RGB")
+            decision = ensemble_decision_for_image(pil)
+        except:
+            decision = ensemble_decision_for_video(path)
+        w,h = get_dims(path)
+        if decision is None:
+            st.error("Could not read media.")
+        else:
+            st.success(f"Origin: **{decision}**")
+            if w and h: st.write(f"Width: **{w}px** — Height: **{h}px** — Resolution: **{w}×{h}**")
+
+st.markdown("---")
+st.markdown('<div class="neon-card">Note: Ensemble maximizes detection accuracy but no system is infallible. Combine with human review for critical decisions.</div>', unsafe_allow_html=True)
+
