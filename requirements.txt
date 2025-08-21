@@ -7,8 +7,10 @@ Pillow
 numpy
 opencv-python-headless
 requests
-yt-dlp
+youtube_dl
 pytube
+yt_dlp
+
 
 
 
