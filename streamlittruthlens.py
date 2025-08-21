@@ -1004,788 +1004,192 @@
 
 
 
-# truthlens_ai_detector.py
-"""
-Truthlens-Ai Detector — Hidden Advanced Settings + High-accuracy defaults
- - Advanced ensemble sliders are hidden unless you set TRUTHLENS_ADMIN_KEY env var and unlock via password.
- - Default weights tuned for higher accuracy.
- - Deepfake model integrated (override with DEEPFAKE_MODEL_ID env var).
- - URL tab first. Summary shown to regular users; detailed frame JSON only visible to admin after unlock.
-"""
-import os
-import io
-import tempfile
-import atexit
-from urllib.parse import urlparse
-import mimetypes
-import base64
-import time
-import json
 
 import streamlit as st
 import requests
-from bs4 import BeautifulSoup
-from PIL import Image, ExifTags, UnidentifiedImageError, ImageChops, ImageOps, ImageSequence
-import numpy as np
-import torch
-import torch.nn.functional as F
-from transformers import CLIPProcessor, CLIPModel, AutoImageProcessor, AutoModelForImageClassification
 import cv2
-import timm
-from torchvision import transforms
+import numpy as np
+from PIL import Image
+from io import BytesIO
+import torch
+from transformers import AutoProcessor, AutoModelForImageClassification, CLIPProcessor, CLIPModel
+import tempfile
+import os
+from urllib.parse import urlparse
+import yt_dlp
 
-# -------------------------
-# Page config
-# -------------------------
-st.set_page_config(page_title="Truthlens-Ai Detector", layout="wide", page_icon="🔎")
-st.markdown(
-    """
-    <style>
-    html, body, [data-testid="stAppViewContainer"] {
-      background: radial-gradient(circle at 10% 10%, #001021, #000000) !important;
-    }
-    h1, h2, h3 { color:#00f9ff !important; text-shadow: 0 0 8px #00f9ff; }
-    .neon-card { border-radius:12px; padding:12px; background: rgba(6,10,20,0.6); box-shadow:0 8px 30px rgba(0,120,255,0.06); color:#dffaff; }
-    small { color:#9fdfff; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+# -----------------------------
+# Hugging Face API Key
+# -----------------------------
+HF_API_KEY = "YOUR_API_KEY_HERE"  # replace with your Hugging Face token
 
-st.title("🔎 Truthlens-Ai Detector")
-st.markdown(
-    '<div class="neon-card">Paste any link (direct media URL, page URL, or data URI) or upload a file. Output: <b>AI-generated</b> or <b>Human-made</b>. Advanced ensemble settings are hidden by default.</div>',
-    unsafe_allow_html=True,
-)
+# -----------------------------
+# Streamlit App Config
+# -----------------------------
+st.set_page_config(page_title="Truthlens-AI Detector", layout="centered")
+st.title("🕵 Truthlens-AI Detector")
+st.write("Detect whether an **Image / Video / URL** is AI-generated or Human-made.")
 
-# -------------------------
-# Device & model config
-# -------------------------
-try:
-    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-except Exception:
-    DEVICE = torch.device("cpu")
+# -----------------------------
+# Load Hugging Face Models (Cached)
+# -----------------------------
+@st.cache_resource
+def load_models():
+    # CLIP
+    clip_proc = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
+    clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16").eval()
+    
+    # ViT classifier for AI vs Human detection
+    vit_proc = AutoProcessor.from_pretrained("microsoft/vision-base-ai-vs-human")
+    vit_model = AutoModelForImageClassification.from_pretrained(
+        "microsoft/vision-base-ai-vs-human"
+    ).eval()
+    
+    return clip_proc, clip_model, vit_proc, vit_model
 
-FRAME_CKPT = os.environ.get("FRAME_CKPT", "")
-VIT_DIR = os.environ.get("VIT_DIR", "")
-DEEPFAKE_MODEL_ID = os.environ.get("DEEPFAKE_MODEL_ID", "prithivMLmods/deepfake-detector-model-v1")
-CLIP_REPO = os.environ.get("CLIP_REPO", "openai/clip-vit-base-patch32")
+clip_proc, clip_model, vit_proc, vit_model = load_models()
 
-# CLIP prompts
-AI_PROMPTS = [
-    "an AI-generated image, synthetic, digital rendering",
-    "a computer-generated picture created by an AI model",
-]
-HUMAN_PROMPTS = [
-    "a real photograph taken by a camera",
-    "an authentic, real-world image captured by a person",
-]
-
-# -------------------------
-# Admin key / advanced visibility
-# -------------------------
-ADMIN_KEY = os.environ.get("TRUTHLENS_ADMIN_KEY", "").strip()  # set this in the environment for admin access
-
-if "admin_authenticated" not in st.session_state:
-    st.session_state["admin_authenticated"] = False
-
-# Sidebar: admin unlock (only visible if ADMIN_KEY is set)
-st.sidebar.title("Truthlens")
-if ADMIN_KEY:
-    st.sidebar.markdown("**Admin:** unlock advanced settings")
-    if not st.session_state["admin_authenticated"]:
-        admin_input = st.sidebar.text_input("Enter admin key", type="password")
-        if st.sidebar.button("Unlock advanced settings"):
-            if admin_input and admin_input == ADMIN_KEY:
-                st.session_state["admin_authenticated"] = True
-                st.sidebar.success("Advanced settings unlocked")
-            else:
-                st.sidebar.error("Incorrect admin key")
-    else:
-        st.sidebar.success("Advanced settings unlocked (admin)")
-else:
-    st.sidebar.markdown("Advanced settings hidden. (Set TRUTHLENS_ADMIN_KEY env var to enable)")
-
-# -------------------------
-# High-accuracy defaults (used when advanced hidden)
-# -------------------------
-DEFAULTS = {
-    "exif_weight": 2.0,
-    "deepfake_weight": 5.0,
-    "frame_weight": 2.5,
-    "vit_weight": 2.0,
-    "clip_weight": 3.0,
-    "face_crop_multiplier": 1.5,
-    "video_ratio": 0.75,
-    "n_sample_frames": 16
-}
-
-# If admin authenticated, show sliders inside a collapsed expander
-if st.session_state["admin_authenticated"]:
-    with st.sidebar.expander("⚙ Advanced ensemble settings (admin only)", expanded=False):
-        exif_weight = st.slider("EXIF (camera) weight", 0.0, 6.0, DEFAULTS["exif_weight"], 0.1)
-        deepfake_weight = st.slider("Deepfake classifier weight", 0.0, 6.0, DEFAULTS["deepfake_weight"], 0.1)
-        frame_weight = st.slider("Frame model weight", 0.0, 4.0, DEFAULTS["frame_weight"], 0.1)
-        vit_weight = st.slider("ViT weight", 0.0, 4.0, DEFAULTS["vit_weight"], 0.1)
-        clip_weight = st.slider("CLIP weight", 0.0, 4.0, DEFAULTS["clip_weight"], 0.1)
-        face_crop_multiplier = st.slider("Face-crop multiplier (per face)", 0.0, 3.0, DEFAULTS["face_crop_multiplier"], 0.1)
-        video_ratio = st.slider("Video decision min AI frame ratio", 0.0, 1.0, DEFAULTS["video_ratio"], 0.01)
-        n_sample_frames = st.slider("Video sample frames", 4, 32, DEFAULTS["n_sample_frames"], 1)
-else:
-    # advanced hidden: use defaults tuned for higher accuracy
-    exif_weight = DEFAULTS["exif_weight"]
-    deepfake_weight = DEFAULTS["deepfake_weight"]
-    frame_weight = DEFAULTS["frame_weight"]
-    vit_weight = DEFAULTS["vit_weight"]
-    clip_weight = DEFAULTS["clip_weight"]
-    face_crop_multiplier = DEFAULTS["face_crop_multiplier"]
-    video_ratio = DEFAULTS["video_ratio"]
-    n_sample_frames = DEFAULTS["n_sample_frames"]
-
-# Small note for end users
-st.sidebar.markdown("**Note:** Defaults are tuned for higher accuracy. Advanced tuning is available to admins only.")
-st.sidebar.markdown("Tip: set TRUTHLENS_ADMIN_KEY in your environment to enable advanced settings.")
-
-# -------------------------
-# Temp file registry & cleanup
-# -------------------------
-TMP_FILES = []
-def register_tmp(p):
-    if p:
-        TMP_FILES.append(p)
-def cleanup_tmp():
-    for p in list(TMP_FILES):
-        try:
-            if os.path.exists(p):
-                os.remove(p)
-        except Exception:
-            pass
-atexit.register(cleanup_tmp)
-
-# -------------------------
-# Networking / download helpers
-# -------------------------
-def safe_get(url, stream=True, timeout=30, allow_redirects=True):
-    headers = {"User-Agent": "Truthlens/1.0 (+https://example.org)"}
-    return requests.get(url, stream=stream, timeout=timeout, headers=headers, allow_redirects=allow_redirects)
-
-def head_request(url, timeout=15):
+# -----------------------------
+# Helper Functions
+# -----------------------------
+def detect_media_ai_or_human(pil_image):
+    votes = {"AI-generated": 0.0, "Human-made": 0.0}
+    
+    # --- ViT Model ---
     try:
-        headers = {"User-Agent": "Truthlens/1.0 (+https://example.org)"}
-        r = requests.head(url, timeout=timeout, headers=headers, allow_redirects=True)
-        return r
-    except Exception:
-        return None
-
-def is_data_uri(u: str):
-    return u.strip().startswith("data:")
-
-def save_data_uri(data_uri: str):
-    try:
-        header, b64 = data_uri.split(",", 1)
-        meta = header.split(";")
-        mime = meta[0][5:] if meta and meta[0].startswith("data:") else "application/octet-stream"
-        ext = mimetypes.guess_extension(mime) or ""
-        data = base64.b64decode(b64)
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
-        tmp.write(data); tmp.flush(); tmp.close()
-        register_tmp(tmp.name)
-        return tmp.name
-    except Exception:
-        return None
-
-def download_to_temp(url: str, timeout=120):
-    if is_data_uri(url):
-        return save_data_uri(url)
-    head = head_request(url)
-    content_type = None
-    if head is not None and head.status_code < 400:
-        content_type = head.headers.get("Content-Type")
-    try:
-        r = safe_get(url, stream=True, timeout=timeout)
-        r.raise_for_status()
-    except Exception as e:
-        raise requests.RequestException(f"Failed to download: {e}")
-    suffix = os.path.splitext(urlparse(url).path)[1] or ""
-    ct = content_type or r.headers.get("Content-Type") or ""
-    if "text/html" in ct:
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".html", mode="wb")
-        tmp.write(r.content); tmp.flush(); tmp.close()
-        register_tmp(tmp.name)
-        return tmp.name
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-    for chunk in r.iter_content(chunk_size=1024*1024):
-        if chunk:
-            tmp.write(chunk)
-    tmp.flush(); tmp.close()
-    register_tmp(tmp.name)
-    return tmp.name
-
-# -------------------------
-# EXIF camera check
-# -------------------------
-def exif_has_camera(img_or_path) -> bool:
-    try:
-        if isinstance(img_or_path, (bytes, bytearray)):
-            img = Image.open(io.BytesIO(img_or_path))
-        elif isinstance(img_or_path, str) and os.path.exists(img_or_path):
-            img = Image.open(img_or_path)
-        elif isinstance(img_or_path, Image.Image):
-            img = img_or_path
-        else:
-            return False
-        exif = getattr(img, "_getexif", lambda: None)()
-        if not exif:
-            return False
-        for tag_id, value in exif.items():
-            tag = ExifTags.TAGS.get(tag_id, tag_id)
-            if tag in ("Make", "Model", "LensModel", "CreatorTool"):
-                if value:
-                    return True
-    except Exception:
-        return False
-    return False
-
-# -------------------------
-# Load models (cached)
-# -------------------------
-@st.cache_resource(show_spinner=True)
-def load_clip():
-    proc = CLIPProcessor.from_pretrained(CLIP_REPO)
-    model = CLIPModel.from_pretrained(CLIP_REPO).to(DEVICE).eval()
-    texts = AI_PROMPTS + HUMAN_PROMPTS
-    inputs = proc(text=texts, return_tensors="pt", padding=True).to(DEVICE)
-    with torch.no_grad():
-        text_feats = model.get_text_features(**inputs)
-    text_feats = text_feats / text_feats.norm(p=2, dim=-1, keepdim=True)
-    return proc, model, text_feats, len(AI_PROMPTS), len(HUMAN_PROMPTS)
-
-@st.cache_resource(show_spinner=True)
-def load_deepfake_model_if_set(model_id):
-    if not model_id:
-        return None, None, None
-    try:
-        proc = AutoImageProcessor.from_pretrained(model_id)
-        mdl = AutoModelForImageClassification.from_pretrained(model_id).to(DEVICE).eval()
-        id2label = getattr(mdl.config, "id2label", {}) or {}
-        return proc, mdl, id2label
-    except Exception:
-        return None, None, None
-
-@st.cache_resource(show_spinner=True)
-def load_frame_model_if_present(ckpt_path):
-    if not ckpt_path or not os.path.exists(ckpt_path):
-        return None, None
-    try:
-        ck = torch.load(ckpt_path, map_location="cpu")
-        arch = ck.get("arch", "resnest50d")
-        model = timm.create_model(arch, pretrained=False, num_classes=2)
-        model.load_state_dict(ck["model_state"])
-        model.to(DEVICE).eval()
-        transform = transforms.Compose([
-            transforms.Resize((224,224)),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485,0.456,0.406],[0.229,0.224,0.225])
-        ])
-        return model, transform
-    except Exception:
-        return None, None
-
-@st.cache_resource(show_spinner=True)
-def load_vit_if_present(vit_dir):
-    if not vit_dir or not os.path.isdir(vit_dir):
-        return None, None
-    try:
-        proc = AutoImageProcessor.from_pretrained(vit_dir)
-        mdl = AutoModelForImageClassification.from_pretrained(vit_dir).to(DEVICE).eval()
-        return proc, mdl
-    except Exception:
-        return None, None
-
-# load models
-with st.spinner("Loading CLIP (and optional models)..."):
-    clip_proc, clip_model, TEXT_FEATS, N_AI, N_HUM = load_clip()
-df_proc, df_model, df_id2label = load_deepfake_model_if_set(DEEPFAKE_MODEL_ID)
-frame_model, frame_transform = load_frame_model_if_present(FRAME_CKPT)
-vit_proc, vit_model = load_vit_if_present(VIT_DIR)
-
-# -------------------------
-# Face detector (OpenCV DNN)
-# -------------------------
-FACE_PROTO = "deploy.prototxt"
-FACE_MODEL = "res10_300x300_ssd_iter_140000.caffemodel"
-if not (os.path.exists(FACE_PROTO) and os.path.exists(FACE_MODEL)):
-    try:
-        p = requests.get("https://raw.githubusercontent.com/opencv/opencv/master/samples/dnn/face_detector/deploy.prototxt", timeout=30)
-        p.raise_for_status()
-        with open(FACE_PROTO, "wb") as f: f.write(p.content)
-        m = requests.get("https://github.com/opencv/opencv_3rdparty/raw/dnn_samples_face_detector_20170830/res10_300x300_ssd_iter_140000.caffemodel", timeout=60)
-        m.raise_for_status()
-        with open(FACE_MODEL, "wb") as f: f.write(m.content)
-    except Exception:
-        pass
-
-FACE_NET = None
-if os.path.exists(FACE_PROTO) and os.path.exists(FACE_MODEL):
-    try:
-        FACE_NET = cv2.dnn.readNetFromCaffe(FACE_PROTO, FACE_MODEL)
-    except Exception:
-        FACE_NET = None
-
-# -------------------------
-# Heuristics
-# -------------------------
-def error_level_analysis(pil_img: Image.Image, scale=90):
-    try:
-        tmp_io = io.BytesIO()
-        pil_img.save(tmp_io, "JPEG", quality=scale)
-        tmp_io.seek(0)
-        recompressed = Image.open(tmp_io).convert("RGB")
-        diff = ImageChops.difference(pil_img.convert("RGB"), recompressed)
-        gray = diff.convert("L")
-        arr = np.asarray(gray).astype(np.float32)
-        return float(arr.mean())
-    except Exception:
-        return 0.0
-
-def jpeg_quantization_score(pil_img: Image.Image):
-    try:
-        if not hasattr(pil_img, "quantization") or pil_img.format != "JPEG":
-            return 0.0
-        q = getattr(pil_img, "quantization", None)
-        if not q:
-            return 0.0
-        vals = []
-        for k, tbl in q.items():
-            if isinstance(tbl, dict):
-                tbl_vals = list(tbl.values())
-            elif isinstance(tbl, (list, tuple)):
-                tbl_vals = list(tbl)
-            else:
-                continue
-            vals.extend(tbl_vals)
-        if not vals:
-            return 0.0
-        return float(np.var(vals))
-    except Exception:
-        return 0.0
-
-def noise_uniformity_score(pil_img: Image.Image):
-    try:
-        gray = ImageOps.grayscale(pil_img).resize((256,256))
-        arr = np.asarray(gray).astype(np.float32)
-        lap = cv2.Laplacian(arr, cv2.CV_64F)
-        return float(np.mean(np.abs(lap)))
-    except Exception:
-        return 0.0
-
-# -------------------------
-# Model prediction helpers
-# -------------------------
-def clip_vote_image(pil_img: Image.Image) -> str:
-    try:
-        inputs = clip_proc(images=pil_img, return_tensors="pt").to(DEVICE)
-        with torch.no_grad():
-            img_feats = clip_model.get_image_features(**inputs)
-        img_feats = img_feats / img_feats.norm(p=2, dim=-1, keepdim=True)
-        logits = img_feats @ TEXT_FEATS.T
-        logits = logits.squeeze(0).cpu()
-        ai_score = logits[:N_AI].mean().item()
-        hm_score = logits[N_AI:N_AI+N_HUM].mean().item()
-        return "AI-generated" if ai_score >= hm_score else "Human-made"
-    except Exception:
-        return "Human-made"
-
-def deepfake_predict(pil_img: Image.Image):
-    if df_model is None or df_proc is None:
-        return None
-    try:
-        inputs = df_proc(images=pil_img, return_tensors="pt").to(DEVICE)
-        with torch.no_grad():
-            out = df_model(**inputs)
-            logits = getattr(out, "logits", None) or out
-            if logits is None:
-                return None
-            pred = int(torch.argmax(logits, dim=-1).cpu().item())
-            if df_id2label:
-                label = df_id2label.get(pred) or df_id2label.get(str(pred)) or ""
-                if "fake" in label.lower() or "deep" in label.lower() or "ai" in label.lower():
-                    return "AI-generated"
-                else:
-                    return "Human-made"
-            return "AI-generated" if pred == 0 else "Human-made"
-    except Exception:
-        return None
-
-def frame_predict(pil_img: Image.Image):
-    if frame_model is None or frame_transform is None:
-        return None
-    try:
-        x = frame_transform(pil_img).unsqueeze(0).to(DEVICE)
-        with torch.no_grad():
-            logits = frame_model(x)
-            pred = int(torch.argmax(logits, dim=1).cpu().item())
-        return "AI-generated" if pred == 0 else "Human-made"
-    except Exception:
-        return None
-
-def vit_predict(pil_img: Image.Image):
-    if vit_model is None or vit_proc is None:
-        return None
-    try:
-        inputs = vit_proc(images=pil_img, return_tensors="pt").to(DEVICE)
+        inputs = vit_proc(images=pil_image, return_tensors="pt")
         with torch.no_grad():
             out = vit_model(**inputs)
-        pred = int(torch.argmax(out.logits, dim=-1).cpu().item())
-        return "AI-generated" if pred == 0 else "Human-made"
-    except Exception:
-        return None
-
-def detect_faces_and_crops(pil_img: Image.Image, min_conf=0.5):
-    if FACE_NET is None:
-        return []
-    img = np.array(pil_img.convert("RGB"))
-    h, w = img.shape[:2]
-    blob = cv2.dnn.blobFromImage(cv2.resize(img, (300, 300)), 1.0, (300, 300), (104.0, 177.0, 123.0))
-    FACE_NET.setInput(blob)
-    detections = FACE_NET.forward()
-    crops = []
-    for i in range(0, detections.shape[2]):
-        conf = float(detections[0, 0, i, 2])
-        if conf > min_conf:
-            box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
-            (x1, y1, x2, y2) = box.astype("int")
-            pad = int(0.05 * max(x2 - x1, y2 - y1))
-            x1 = max(0, x1 - pad); y1 = max(0, y1 - pad)
-            x2 = min(w, x2 + pad); y2 = min(h, y2 + pad)
-            crop = Image.fromarray(img[y1:y2, x1:x2])
-            crops.append(crop)
-    return crops
-
-# -------------------------
-# Ensemble per-image
-# -------------------------
-def ensemble_decision_for_image(pil_img: Image.Image):
-    votes = {"AI-generated": 0.0, "Human-made": 0.0}
-    evidence = []
-
-    try:
-        if exif_has_camera(pil_img):
-            votes["Human-made"] += exif_weight
-            evidence.append(("EXIF", "Human-made", exif_weight))
+            pred = int(torch.argmax(out.logits, dim=-1).item())
+            votes["AI-generated" if pred == 0 else "Human-made"] += 1.5
     except Exception:
         pass
-
-    df_full = deepfake_predict(pil_img)
-    if df_full == "AI-generated":
-        votes["AI-generated"] += deepfake_weight
-        evidence.append(("DeepfakeCls", "AI-generated", deepfake_weight))
-    elif df_full == "Human-made":
-        votes["Human-made"] += deepfake_weight
-        evidence.append(("DeepfakeCls", "Human-made", deepfake_weight))
-
-    fm_full = frame_predict(pil_img)
-    if fm_full == "AI-generated":
-        votes["AI-generated"] += frame_weight
-        evidence.append(("FrameModel", "AI-generated", frame_weight))
-    elif fm_full == "Human-made":
-        votes["Human-made"] += frame_weight
-        evidence.append(("FrameModel", "Human-made", frame_weight))
-
-    vit_full = vit_predict(pil_img)
-    if vit_full == "AI-generated":
-        votes["AI-generated"] += vit_weight
-        evidence.append(("ViT", "AI-generated", vit_weight))
-    elif vit_full == "Human-made":
-        votes["Human-made"] += vit_weight
-        evidence.append(("ViT", "Human-made", vit_weight))
-
+    
+    # --- CLIP Semantic check ---
     try:
-        clip_full = clip_vote_image(pil_img)
-        votes[clip_full] += clip_weight
-        evidence.append(("CLIP", clip_full, clip_weight))
+        prompts = ["AI-generated image", "Human-made image"]
+        inputs = clip_proc(text=prompts, images=pil_image, return_tensors="pt", padding=True)
+        with torch.no_grad():
+            img_features = clip_model.get_image_features(**inputs).detach()
+            text_features = clip_model.get_text_features(**inputs).detach()
+            img_features /= img_features.norm(p=2, dim=-1, keepdim=True)
+            text_features /= text_features.norm(p=2, dim=-1, keepdim=True)
+            logits = (img_features @ text_features.T).squeeze(0)
+            clip_label = "AI-generated" if logits[0] > logits[1] else "Human-made"
+            votes[clip_label] += 1.0
     except Exception:
         pass
+    
+    return "AI-generated" if votes["AI-generated"] > votes["Human-made"] else "Human-made"
 
-    ela_score = error_level_analysis(pil_img)
-    quant_var = jpeg_quantization_score(pil_img)
-    noise_score = noise_uniformity_score(pil_img)
-
-    if ela_score > 8.0:
-        votes["AI-generated"] += 0.8
-        evidence.append(("ELA", "AI-like", 0.8))
-    if quant_var < 20.0 and quant_var > 0.0:
-        votes["AI-generated"] += 0.6
-        evidence.append(("QuantVarLow", "AI-like", 0.6))
-    if noise_score < 1.0:
-        votes["AI-generated"] += 0.4
-        evidence.append(("NoiseLow", "AI-like", 0.4))
-
-    try:
-        crops = detect_faces_and_crops(pil_img)
-    except Exception:
-        crops = []
-    for crop in crops:
-        df_c = deepfake_predict(crop)
-        if df_c == "AI-generated":
-            votes["AI-generated"] += (deepfake_weight * 0.6) * face_crop_multiplier
-            evidence.append(("DeepfakeCrop", "AI-generated", (deepfake_weight * 0.6) * face_crop_multiplier))
-        elif df_c == "Human-made":
-            votes["Human-made"] += (deepfake_weight * 0.6) * face_crop_multiplier
-            evidence.append(("DeepfakeCrop", "Human-made", (deepfake_weight * 0.6) * face_crop_multiplier))
-        fm_c = frame_predict(crop)
-        if fm_c == "AI-generated":
-            votes["AI-generated"] += (frame_weight * 0.6) * face_crop_multiplier
-            evidence.append(("FrameCrop", "AI-generated", (frame_weight * 0.6) * face_crop_multiplier))
-        elif fm_c == "Human-made":
-            votes["Human-made"] += (frame_weight * 0.6) * face_crop_multiplier
-            evidence.append(("FrameCrop", "Human-made", (frame_weight * 0.6) * face_crop_multiplier))
-        try:
-            clip_c = clip_vote_image(crop)
-            votes[clip_c] += 0.2 * face_crop_multiplier
-            evidence.append(("CLIPCrop", clip_c, 0.2 * face_crop_multiplier))
-        except Exception:
-            pass
-
-    if abs(votes["AI-generated"] - votes["Human-made"]) < 1e-6:
-        try:
-            tie = clip_vote_image(pil_img)
-            evidence.append(("TieBreak-CLIP", tie, 0.0))
-            return tie, {"votes": votes, "evidence": evidence, "heuristics": {"ela": ela_score, "quant_var": quant_var, "noise": noise_score}}
-        except Exception:
-            return "Human-made", {"votes": votes, "evidence": evidence, "heuristics": {"ela": ela_score, "quant_var": quant_var, "noise": noise_score}}
-    final = "AI-generated" if votes["AI-generated"] > votes["Human-made"] else "Human-made"
-    return final, {"votes": votes, "evidence": evidence, "heuristics": {"ela": ela_score, "quant_var": quant_var, "noise": noise_score}}
-
-# -------------------------
-# Video helpers
-# -------------------------
-def sample_frames_from_video_opencv(path, n_frames=16):
+def get_video_frames(path, n_frames=12):
     cap = cv2.VideoCapture(path)
     if not cap.isOpened():
         return []
-    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     if total <= 0:
         cap.release()
         return []
-    indices = np.linspace(0, max(0, total - 1), num=min(n_frames, total)).astype(int)
+    indices = np.linspace(0, max(0,total-1), num=min(n_frames,total)).astype(int)
     frames = []
     for idx in indices:
         cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx))
-        ok, frame = cap.read()
-        if not ok:
+        ret, frame = cap.read()
+        if not ret:
             continue
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frames.append(Image.fromarray(frame_rgb))
     cap.release()
     return frames
 
-def ensemble_decision_for_video(path, n_sample_frames=12):
-    frames = sample_frames_from_video_opencv(path, n_frames=n_sample_frames)
+def detect_video_ai_or_human(path):
+    frames = get_video_frames(path)
     if not frames:
-        return None, {}
-    counts = {"AI-generated": 0, "Human-made": 0}
-    frame_details = []
+        return "Unknown"
+    votes = {"AI-generated":0, "Human-made":0}
     for f in frames:
-        d, meta = ensemble_decision_for_image(f)
-        counts[d] += 1
-        frame_details.append((d, meta))
-    ai_ratio_local = counts["AI-generated"] / max(1, (counts["AI-generated"] + counts["Human-made"]))
-    decision = "AI-generated" if ai_ratio_local >= video_ratio else "Human-made"
-    return decision, {"counts": counts, "ai_ratio": ai_ratio_local, "frame_details": frame_details}
+        label = detect_media_ai_or_human(f)
+        votes[label] += 1
+    return "AI-generated" if votes["AI-generated"] >= votes["Human-made"] else "Human-made"
 
-# -------------------------
-# HTML scraping helper
-# -------------------------
-def extract_media_from_html(html_path_or_bytes, base_url=None):
-    try:
-        if isinstance(html_path_or_bytes, (str, bytes)):
-            if isinstance(html_path_or_bytes, str) and os.path.exists(html_path_or_bytes):
-                with open(html_path_or_bytes, "rb") as f:
-                    html = f.read()
-            else:
-                html = html_path_or_bytes if isinstance(html_path_or_bytes, bytes) else html_path_or_bytes.encode("utf-8")
-        else:
-            return None
-        soup = BeautifulSoup(html, "html.parser")
-        og = soup.find("meta", property="og:image")
-        if og and og.get("content"):
-            return requests.compat.urljoin(base_url or "", og.get("content"))
-        tw = soup.find("meta", attrs={"name": "twitter:image"})
-        if tw and tw.get("content"):
-            return requests.compat.urljoin(base_url or "", tw.get("content"))
-        vid = soup.find("video")
-        if vid:
-            src = vid.get("src")
-            if src:
-                return requests.compat.urljoin(base_url or "", src)
-            source = vid.find("source")
-            if source and source.get("src"):
-                return requests.compat.urljoin(base_url or "", source.get("src"))
-        imgs = soup.find_all("img")
-        if imgs:
-            candidates = []
-            for im in imgs:
-                for attr in ("data-src", "srcset", "src"):
-                    v = im.get(attr)
-                    if not v:
-                        continue
-                    if attr == "srcset":
-                        v = v.split(",")[0].strip().split(" ")[0]
-                    candidates.append(requests.compat.urljoin(base_url or "", v))
-            if candidates:
-                return candidates[0]
-        return None
-    except Exception:
-        return None
+def download_media_from_url(url):
+    """Handles direct URLs or platforms (TikTok/YouTube/Instagram) using yt-dlp"""
+    parsed = urlparse(url)
+    suffix = os.path.splitext(parsed.path)[1] or ".mp4"
+    
+    tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    tmp_file.close()
+    
+    if any(domain in url.lower() for domain in ["youtube.com","youtu.be","tiktok.com","instagram.com"]):
+        ydl_opts = {
+            "outtmpl": tmp_file.name,
+            "quiet": True,
+            "no_warnings": True,
+            "format": "mp4",
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+    else:
+        r = requests.get(url, stream=True, timeout=60)
+        r.raise_for_status()
+        with open(tmp_file.name, "wb") as f:
+            for chunk in r.iter_content(1024*1024):
+                f.write(chunk)
+    return tmp_file.name
 
-# -------------------------
-# UI tabs (URL first)
-# -------------------------
-tab_url, tab_upload = st.tabs(["🌐 URL", "📁 Upload"])
+# -----------------------------
+# Tabs
+# -----------------------------
+tab1, tab2 = st.tabs(["🌐 Paste URL / Link", "📂 Upload Media"])
 
-with tab_url:
-    st.header("Paste any link (direct media URL, page URL, or data URI)")
-    url = st.text_input("Enter URL (or data URI):", placeholder="https://.../image.jpg or https://example.com/article or data:image/png;base64,...")
-    col1, col2 = st.columns([1,3])
-    with col1:
-        analyze_url = st.button("Analyze URL")
-    with col2:
-        st.markdown("Tip: paste a social post/page URL — the app will try to find embedded media (og:image / video tags).")
-
-    if analyze_url:
-        if not url:
-            st.error("Please paste a URL to analyze.")
-        else:
-            tmp_path = None
+# -----------------------------
+# Tab 1: URL
+# -----------------------------
+with tab1:
+    url_input = st.text_input("Paste any Image/Video URL (TikTok, YouTube, Instagram supported):")
+    if st.button("Analyze URL"):
+        if url_input:
             try:
-                with st.spinner("Resolving URL and downloading / scraping..."):
-                    tmp_path = download_to_temp(url)
-                    if tmp_path and tmp_path.endswith(".html"):
-                        media_url = extract_media_from_html(tmp_path, base_url=url)
-                        if media_url:
-                            try:
-                                if os.path.exists(tmp_path):
-                                    os.remove(tmp_path); TMP_FILES.remove(tmp_path)
-                            except Exception:
-                                pass
-                            tmp_path = download_to_temp(media_url)
-                        else:
-                            st.warning("Page did not contain clear embedded media (og:image / video / img). Attempting to analyze page snapshot as image if possible.")
-                    try:
-                        pil = Image.open(tmp_path)
-                        if pil.format == "GIF":
-                            frames = [f.copy().convert("RGB") for f in ImageSequence.Iterator(pil)]
-                            base_frame = frames[0]
-                            w, h = base_frame.size
-                            decision, meta = ensemble_decision_for_image(base_frame)
-                            # Summary for users
-                            st.image(base_frame, caption=f"GIF image (frame 0) — {w}×{h}px", use_column_width=True)
-                            st.success(f"Origin: **{decision}**")
-                            st.write(f"Resolution: **{w}×{h}**")
-                            # Admin-only details
-                            if st.session_state["admin_authenticated"]:
-                                with st.expander("🔧 Detailed meta (admin)"):
-                                    st.json({"meta_summary": meta})
-                        else:
-                            pil = pil.convert("RGB")
-                            w, h = pil.size
-                            with st.spinner("Analyzing image (ensemble heuristics + models)..."):
-                                decision, meta = ensemble_decision_for_image(pil)
-                            st.image(pil, caption=f"URL Image — {w}×{h}px", use_column_width=True)
-                            st.success(f"Origin: **{decision}**")
-                            st.write(f"Resolution: **{w}×{h}**")
-                            # show compact evidence summary to all users (top 3)
-                            st.markdown("**Top signals (summary):**")
-                            for e in meta.get("evidence", [])[:3]:
-                                st.write(f"- {e[0]} → {e[1]} (weight {e[2]:.2f})")
-                            # admin-only: full meta
-                            if st.session_state["admin_authenticated"]:
-                                with st.expander("🔧 Full meta (admin)"):
-                                    st.json({"meta": meta})
-                    except UnidentifiedImageError:
-                        # treat as video
-                        st.video(tmp_path)
-                        with st.spinner("Sampling and analyzing video frames..."):
-                            decision, meta = ensemble_decision_for_video(tmp_path, n_sample_frames=n_sample_frames)
-                        w, h = None, None
-                        try:
-                            w, h = get_video_dims(tmp_path)
-                        except Exception:
-                            pass
-                        # Summary display
-                        ai_cnt = meta.get("counts", {}).get("AI-generated", 0)
-                        hm_cnt = meta.get("counts", {}).get("Human-made", 0)
-                        ai_ratio_local = meta.get("ai_ratio", 0.0)
-                        st.metric("AI frames", f"{ai_cnt}")
-                        st.metric("Human frames", f"{hm_cnt}")
-                        st.progress(ai_ratio_local)
-                        final_label = "AI-generated" if ai_ratio_local >= video_ratio else "Human-made"
-                        if ai_ratio_local >= video_ratio:
-                            st.success(f"Origin: **{final_label}**")
-                        else:
-                            st.info(f"Origin: **{final_label}**")
-                        if w and h:
-                            st.write(f"Resolution: **{w}×{h}**")
-                        # Admin-only: frame details JSON
-                        if st.session_state["admin_authenticated"]:
-                            with st.expander("🔧 Full video meta (admin)"):
-                                st.json(meta)
-            except requests.RequestException as e:
-                st.error(f"Network error while downloading media: {e}")
+                media_path = download_media_from_url(url_input)
+                try:
+                    image = Image.open(media_path).convert("RGB")
+                    w,h = image.size
+                    st.image(image, caption=f"Image ({w}x{h})", use_column_width=True)
+                    label = detect_media_ai_or_human(image)
+                    st.success(f"Result: **{label}** — Resolution: {w}×{h}")
+                except:
+                    cap = cv2.VideoCapture(media_path)
+                    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    cap.release()
+                    st.video(media_path)
+                    label = detect_video_ai_or_human(media_path)
+                    st.success(f"Result: **{label}** — Resolution: {w}×{h}")
             except Exception as e:
                 st.error(f"Failed to analyze URL: {e}")
-            finally:
-                try:
-                    if tmp_path and os.path.exists(tmp_path):
-                        os.remove(tmp_path); TMP_FILES.remove(tmp_path)
-                except Exception:
-                    pass
 
-with tab_upload:
-    st.header("Upload an image or a video (any extension)")
-    uploaded = st.file_uploader("Drop file here (images/videos). The app auto-detects the type.", type=None)
-    if uploaded is not None:
-        suffix = os.path.splitext(uploaded.name)[1] or ""
-        tmpf = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-        tmpf.write(uploaded.read()); tmpf.flush(); tmpf.close()
-        register_tmp(tmpf.name)
-        path = tmpf.name
-
+# -----------------------------
+# Tab 2: Upload Media
+# -----------------------------
+with tab2:
+    uploaded_file = st.file_uploader("Upload an Image or Video", type=["jpg","jpeg","png","mp4","avi","mov","mkv"])
+    if uploaded_file is not None:
+        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[1])
+        tmp_file.write(uploaded_file.read())
+        tmp_file.flush()
+        tmp_file.close()
+        
         try:
-            pil = Image.open(path).convert("RGB")
-            w, h = pil.size
-            with st.spinner("Analyzing upload..."):
-                decision, meta = ensemble_decision_for_image(pil)
-            st.image(pil, caption=f"Uploaded Image — {w}×{h}px", use_column_width=True)
-            st.success(f"Origin: **{decision}**")
-            st.write(f"Resolution: **{w}×{h}**")
-            st.markdown("**Top signals (summary):**")
-            for e in meta.get("evidence", [])[:3]:
-                st.write(f"- {e[0]} → {e[1]} (weight {e[2]:.2f})")
-            if st.session_state["admin_authenticated"]:
-                with st.expander("🔧 Full meta (admin)"):
-                    st.json(meta)
-        except UnidentifiedImageError:
-            st.video(path)
-            with st.spinner("Sampling video and analyzing..."):
-                decision, meta = ensemble_decision_for_video(path, n_sample_frames=n_sample_frames)
-            ai_cnt = meta.get("counts", {}).get("AI-generated", 0)
-            hm_cnt = meta.get("counts", {}).get("Human-made", 0)
-            ai_ratio_local = meta.get("ai_ratio", 0.0)
-            st.metric("AI frames", f"{ai_cnt}")
-            st.metric("Human frames", f"{hm_cnt}")
-            st.progress(ai_ratio_local)
-            final_label = "AI-generated" if ai_ratio_local >= video_ratio else "Human-made"
-            if ai_ratio_local >= video_ratio:
-                st.success(f"Origin: **{final_label}**")
-            else:
-                st.info(f"Origin: **{final_label}**")
-            if st.session_state["admin_authenticated"]:
-                with st.expander("🔧 Full video meta (admin)"):
-                    st.json(meta)
-
-# Footer
-st.markdown("---")
-st.markdown('<div class="neon-card">Note: Defaults are tuned for higher accuracy. Advanced tuning is admin-only. No detector is perfect — use provenance and human review for critical cases.</div>', unsafe_allow_html=True)
-
+            image = Image.open(tmp_file.name).convert("RGB")
+            w,h = image.size
+            st.image(image, caption=f"Image ({w}x{h})", use_column_width=True)
+            label = detect_media_ai_or_human(image)
+            st.success(f"Result: **{label}** — Resolution: {w}×{h}")
+        except:
+            cap = cv2.VideoCapture(tmp_file.name)
+            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            cap.release()
+            st.video(tmp_file.name)
+            label = detect_video_ai_or_human(tmp_file.name)
+            st.success(f"Result: **{label}** — Resolution: {w}×{h}")
