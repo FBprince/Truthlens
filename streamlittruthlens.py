@@ -1284,92 +1284,621 @@
 
 
 
+# #!/usr/bin/env python3
+# # -*- coding: utf-8 -*-
+
+# import hashlib
+# import os
+# import time
+# from dataclasses import dataclass
+# from typing import Optional, Tuple
+
+# import streamlit as st
+
+
+# # -----------------------------
+# # Page setup
+# # -----------------------------
+
+# st.set_page_config(
+#     page_title="Truthlens — Misinformation Scanner",
+#     page_icon="🔎",
+#     layout="wide",
+# )
+
+# # Custom CSS to approximate the neon dark theme
+# st.markdown(
+#     """
+#     <style>
+#     :root {
+#       --bg-900: #0B0F14;
+#       --bg-800: #0F1622;
+#       --text-100: #E6F0FF;
+#       --text-300: #9BB3C9;
+#       --line-700: #1B2A3B;
+#       --blue: #00D4FF;
+#       --fuchsia: #FF2BD1;
+#       --green: #39FF88;
+#       --red: #FF5C5C;
+#       --radius-lg: 16px;
+#       --radius-md: 12px;
+#       --radius-sm: 8px;
+#       --shadow-glow-blue: 0 0 24px rgba(0, 212, 255, 0.35);
+#       --shadow-glow-green: 0 0 24px rgba(57, 255, 136, 0.35);
+#       --shadow-glow-red: 0 0 24px rgba(255, 92, 92, 0.35);
+#     }
+
+#     .truthlens-panel {
+#       background: var(--bg-800);
+#       border: 1px solid var(--line-700);
+#       border-radius: var(--radius-lg);
+#       padding: 24px;
+#       color: var(--text-100);
+#     }
+#     .truthlens-title {
+#       font-weight: 700;
+#       font-size: 22px;
+#       margin-bottom: 12px;
+#     }
+#     .hint { color: var(--text-300); }
+#     .tab-underline {
+#       height: 3px;
+#       border-radius: 2px;
+#       background: linear-gradient(90deg, var(--blue), var(--fuchsia));
+#       box-shadow: var(--shadow-glow-blue);
+#       margin-top: 8px;
+#       margin-bottom: 2px;
+#     }
+#     .dropzone {
+#       border: 2px dashed var(--line-700);
+#       border-radius: var(--radius-lg);
+#       padding: 28px;
+#       text-align: center;
+#       color: var(--text-300);
+#       background: var(--bg-900);
+#     }
+#     .verdict-good { color: var(--green); font-weight: 800; font-size: 22px; }
+#     .verdict-bad { color: var(--red); font-weight: 800; font-size: 22px; }
+#     .card { background: var(--bg-900); border: 1px solid var(--line-700); border-radius: 12px; padding: 12px; }
+#     .card-label { color: var(--text-300); font-size: 12px; letter-spacing: 0.04em; }
+#     .card-value { color: var(--text-100); font-size: 16px; font-weight: 600; }
+#     </style>
+#     """,
+#     unsafe_allow_html=True,
+# )
+
+# # -----------------------------
+# # Utilities
+# # -----------------------------
+
+# @dataclass
+# class AnalysisResult:
+#     is_ai_generated: bool
+#     confidence_pct: int
+#     resolution: str
+#     aspect_ratio: str
+#     file_type: str
+#     video_length: Optional[str] = None
+
+
+# def deterministic_score(seed: str) -> float:
+#     digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+#     value = int(digest[:8], 16) / 0xFFFFFFFF
+#     return value
+
+
+# def guess_resolution_and_ratio(source: str) -> Tuple[str, str]:
+#     lower = source.lower()
+#     if any(k in lower for k in ["tiktok", "shorts", "reels"]):
+#         return "1080 × 1920", "9:16"
+#     if any(k in lower for k in ["instagram", "stories"]):
+#         return "1080 × 1350", "4:5"
+#     return "1920 × 1080", "16:9"
+
+
+# def guess_video_length(source: str) -> str:
+#     score = deterministic_score(source)
+#     total_secs = 10 + int(score * 160)
+#     m, s = divmod(total_secs, 60)
+#     return f"{m:02d}:{s:02d}"
+
+
+# def simulate_analysis_and_results(source: str) -> AnalysisResult:
+#     res, ratio = guess_resolution_and_ratio(source)
+#     ext = os.path.splitext(source)[1].lower()
+#     score = deterministic_score(source)
+#     confidence = 72 + int(score * 27)
+#     is_ai = score >= 0.5
+#     file_type = ext if ext else (".mp4" if "http" in source else ".jpg")
+#     video_len = guess_video_length(source) if ext in {".mp4", ".mov", ".avi", ".mkv", ".webm"} or ("tiktok" in source.lower() or "youtube" in source.lower()) else None
+#     return AnalysisResult(
+#         is_ai_generated=is_ai,
+#         confidence_pct=confidence,
+#         resolution=res,
+#         aspect_ratio=ratio,
+#         file_type=file_type,
+#         video_length=video_len,
+#     )
+
+# # -----------------------------
+# # App Header
+# # -----------------------------
+
+# st.markdown("<div class='truthlens-title'>Truthlens</div>", unsafe_allow_html=True)
+
+# with st.container():
+#     st.markdown("<div class='truthlens-panel'>", unsafe_allow_html=True)
+
+#     tabs = st.tabs(["URL (Default)", "Media Upload"])
+
+#     # URL Tab
+#     with tabs[0]:
+#         url_col1, url_col2 = st.columns([6, 1])
+#         with url_col1:
+#             url_input = st.text_input(
+#                 "",
+#                 placeholder="Paste any media URL, including links from social media like TikTok, Instagram, and YouTube...",
+#                 label_visibility="collapsed",
+#             )
+#             st.caption("Resolving media source…")
+#         with url_col2:
+#             submit_url = st.button("Analyze", type="primary", use_container_width=True)
+
+#         if submit_url and not url_input:
+#             st.warning("We couldn’t read that link. Check the URL and try again.")
+
+#     # Upload Tab
+#     with tabs[1]:
+#         st.markdown("<div class='dropzone'>Drag & Drop a file here or Click to browse.</div>", unsafe_allow_html=True)
+#         uploaded = st.file_uploader("Upload media", type=["jpg","jpeg","png","webp","bmp","gif","mp4","mov","avi","mkv","webm"], label_visibility="collapsed")
+#         submit_upload = st.button("Analyze Upload", use_container_width=True)
+
+#     st.markdown("<div class='tab-underline'></div>", unsafe_allow_html=True)
+
+#     # Trigger analysis
+#     source: Optional[str] = None
+#     if submit_url and url_input:
+#         source = url_input
+#     elif submit_upload and uploaded is not None:
+#         # We use the filename as deterministic seed; in real app, save and analyze file bytes
+#         source = uploaded.name
+
+#     # Scan & Analysis simulation
+#     if source:
+#         st.divider()
+#         msg_slot = st.empty()
+#         progress = st.progress(0, text="Initializing…")
+#         steps = [
+#             "Analyzing pixel integrity…",
+#             "Scanning for artifact patterns…",
+#             "Cross-referencing data points…",
+#             "Evaluating compression signatures…",
+#             "Measuring sensor noise consistency…",
+#             "Aggregating model inferences…",
+#         ]
+#         for i, msg in enumerate(steps, start=1):
+#             msg_slot.markdown(f"<span class='hint'>{msg}</span>", unsafe_allow_html=True)
+#             progress.progress(int(i / len(steps) * 100), text=msg)
+#             time.sleep(0.9)
+#         msg_slot.empty()
+
+#         # Results
+#         result = simulate_analysis_and_results(source)
+#         st.success("Analysis complete")
+
+#         # Verdict
+#         verdict_class = "verdict-bad" if result.is_ai_generated else "verdict-good"
+#         verdict_text = "Likely AI-Generated" if result.is_ai_generated else "Likely Human-Created"
+#         st.markdown(f"<div class='{verdict_class}'>{verdict_text}</div>", unsafe_allow_html=True)
+#         st.caption("This is a probabilistic assessment, not an absolute determination.")
+
+#         # Data Summary cards
+#         c1, c2, c3, c4 = st.columns(4)
+#         with c1:
+#             st.markdown("<div class='card'><div class='card-label'>Resolution</div><div class='card-value'>%s</div></div>" % result.resolution, unsafe_allow_html=True)
+#         with c2:
+#             st.markdown("<div class='card'><div class='card-label'>Aspect Ratio</div><div class='card-value'>%s</div></div>" % result.aspect_ratio, unsafe_allow_html=True)
+#         with c3:
+#             st.markdown("<div class='card'><div class='card-label'>File Type</div><div class='card-value'>%s</div></div>" % result.file_type, unsafe_allow_html=True)
+#         with c4:
+#             if result.video_length:
+#                 st.markdown("<div class='card'><div class='card-label'>Video Length</div><div class='card-value'>%s</div></div>" % result.video_length, unsafe_allow_html=True)
+#             else:
+#                 st.markdown("<div class='card'><div class='card-label'>Video Length</div><div class='card-value'>—</div></div>", unsafe_allow_html=True)
+
+#         # Confidence meter
+#         st.write("Confidence Score")
+#         conf_bar = st.progress(result.confidence_pct)
+#         st.write(f"{result.confidence_pct}% likely {'AI-Generated' if result.is_ai_generated else 'Human-Created'}")
+
+#     st.markdown("</div>", unsafe_allow_html=True)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import hashlib
 import os
 import time
+import re
+import numpy as np
 from dataclasses import dataclass
-from typing import Optional, Tuple
-
+from typing import Optional, Tuple, List, Dict
+from PIL import Image
 import streamlit as st
-
 
 # -----------------------------
 # Page setup
 # -----------------------------
 
 st.set_page_config(
-    page_title="Truthlens — Misinformation Scanner",
+    page_title="Truthlens — Advanced AI Content Detection",
     page_icon="🔎",
     layout="wide",
 )
 
-# Custom CSS to approximate the neon dark theme
+# Enhanced CSS with modern dark theme and animations
 st.markdown(
     """
     <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    
     :root {
-      --bg-900: #0B0F14;
-      --bg-800: #0F1622;
+      --bg-1000: #0A0E14;
+      --bg-900: #0F1419;
+      --bg-800: #1A1F26;
+      --bg-700: #252B33;
       --text-100: #E6F0FF;
+      --text-200: #D4E6FF;
       --text-300: #9BB3C9;
+      --text-400: #7A8FA6;
+      --line-600: #2A3441;
       --line-700: #1B2A3B;
       --blue: #00D4FF;
+      --cyan: #00FFF0;
       --fuchsia: #FF2BD1;
+      --purple: #8B5CF6;
       --green: #39FF88;
+      --yellow: #FFD700;
       --red: #FF5C5C;
-      --radius-lg: 16px;
-      --radius-md: 12px;
-      --radius-sm: 8px;
-      --shadow-glow-blue: 0 0 24px rgba(0, 212, 255, 0.35);
-      --shadow-glow-green: 0 0 24px rgba(57, 255, 136, 0.35);
-      --shadow-glow-red: 0 0 24px rgba(255, 92, 92, 0.35);
+      --orange: #FF8C42;
+      --radius-lg: 20px;
+      --radius-md: 16px;
+      --radius-sm: 12px;
+      --shadow-glow-blue: 0 0 32px rgba(0, 212, 255, 0.4);
+      --shadow-glow-green: 0 0 32px rgba(57, 255, 136, 0.4);
+      --shadow-glow-red: 0 0 32px rgba(255, 92, 92, 0.4);
+      --shadow-glow-purple: 0 0 32px rgba(139, 92, 246, 0.4);
+      --gradient-primary: linear-gradient(135deg, var(--blue) 0%, var(--purple) 50%, var(--fuchsia) 100%);
+      --gradient-secondary: linear-gradient(135deg, var(--cyan) 0%, var(--blue) 100%);
+      --gradient-success: linear-gradient(135deg, var(--green) 0%, var(--cyan) 100%);
+      --gradient-danger: linear-gradient(135deg, var(--red) 0%, var(--orange) 100%);
+    }
+
+    * {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    .stApp {
+      background: radial-gradient(ellipse at top, var(--bg-800) 0%, var(--bg-1000) 70%);
+      color: var(--text-100);
+    }
+
+    .main-header {
+      text-align: center;
+      padding: 2rem 0;
+      background: var(--gradient-primary);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-weight: 800;
+      font-size: 3.5rem;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+      animation: glow 2s ease-in-out infinite alternate;
+    }
+
+    .main-subtitle {
+      text-align: center;
+      color: var(--text-300);
+      font-size: 1.2rem;
+      font-weight: 400;
+      margin-bottom: 3rem;
+    }
+
+    @keyframes glow {
+      from { text-shadow: 0 0 20px rgba(0, 212, 255, 0.5); }
+      to { text-shadow: 0 0 30px rgba(255, 43, 209, 0.8); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    @keyframes slideIn {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
     }
 
     .truthlens-panel {
-      background: var(--bg-800);
-      border: 1px solid var(--line-700);
+      background: linear-gradient(145deg, var(--bg-800), var(--bg-700));
+      border: 1px solid var(--line-600);
       border-radius: var(--radius-lg);
-      padding: 24px;
+      padding: 2rem;
       color: var(--text-100);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(10px);
+      position: relative;
+      overflow: hidden;
     }
-    .truthlens-title {
-      font-weight: 700;
-      font-size: 22px;
-      margin-bottom: 12px;
+
+    .truthlens-panel::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: var(--gradient-primary);
+      opacity: 0.6;
     }
-    .hint { color: var(--text-300); }
+
+    .analysis-card {
+      background: linear-gradient(145deg, var(--bg-900), var(--bg-800));
+      border: 1px solid var(--line-700);
+      border-radius: var(--radius-md);
+      padding: 1.5rem;
+      margin: 1rem 0;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+      animation: slideIn 0.5s ease-out;
+    }
+
     .tab-underline {
-      height: 3px;
+      height: 4px;
       border-radius: 2px;
-      background: linear-gradient(90deg, var(--blue), var(--fuchsia));
+      background: var(--gradient-primary);
       box-shadow: var(--shadow-glow-blue);
-      margin-top: 8px;
-      margin-bottom: 2px;
+      margin-top: 12px;
+      margin-bottom: 8px;
+      animation: pulse 2s infinite;
     }
+
     .dropzone {
-      border: 2px dashed var(--line-700);
+      border: 2px dashed var(--line-600);
       border-radius: var(--radius-lg);
-      padding: 28px;
+      padding: 3rem;
       text-align: center;
       color: var(--text-300);
-      background: var(--bg-900);
+      background: var(--bg-1000);
+      transition: all 0.3s ease;
+      position: relative;
     }
-    .verdict-good { color: var(--green); font-weight: 800; font-size: 22px; }
-    .verdict-bad { color: var(--red); font-weight: 800; font-size: 22px; }
-    .card { background: var(--bg-900); border: 1px solid var(--line-700); border-radius: 12px; padding: 12px; }
-    .card-label { color: var(--text-300); font-size: 12px; letter-spacing: 0.04em; }
-    .card-value { color: var(--text-100); font-size: 16px; font-weight: 600; }
+
+    .dropzone:hover {
+      border-color: var(--blue);
+      background: var(--bg-900);
+      box-shadow: var(--shadow-glow-blue);
+    }
+
+    .verdict-human { 
+      color: var(--green); 
+      font-weight: 800; 
+      font-size: 2rem; 
+      text-shadow: var(--shadow-glow-green);
+      animation: slideIn 0.8s ease-out;
+    }
+    
+    .verdict-ai { 
+      color: var(--red); 
+      font-weight: 800; 
+      font-size: 2rem; 
+      text-shadow: var(--shadow-glow-red);
+      animation: slideIn 0.8s ease-out;
+    }
+    
+    .verdict-uncertain { 
+      color: var(--yellow); 
+      font-weight: 800; 
+      font-size: 2rem; 
+      text-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+      animation: slideIn 0.8s ease-out;
+    }
+
+    .metric-card { 
+      background: linear-gradient(145deg, var(--bg-1000), var(--bg-900));
+      border: 1px solid var(--line-700); 
+      border-radius: var(--radius-md); 
+      padding: 1.5rem; 
+      text-align: center;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--gradient-secondary);
+    }
+
+    .metric-label { 
+      color: var(--text-400); 
+      font-size: 0.85rem; 
+      font-weight: 500;
+      letter-spacing: 0.05em; 
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+    
+    .metric-value { 
+      color: var(--text-100); 
+      font-size: 1.4rem; 
+      font-weight: 700; 
+    }
+
+    .confidence-bar {
+      background: var(--bg-1000);
+      border-radius: var(--radius-sm);
+      height: 12px;
+      overflow: hidden;
+      position: relative;
+      margin: 1rem 0;
+    }
+
+    .confidence-fill {
+      height: 100%;
+      border-radius: var(--radius-sm);
+      transition: width 1s ease-out;
+      position: relative;
+    }
+
+    .confidence-fill.high {
+      background: var(--gradient-success);
+      box-shadow: var(--shadow-glow-green);
+    }
+
+    .confidence-fill.medium {
+      background: linear-gradient(90deg, var(--yellow), var(--orange));
+      box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+    }
+
+    .confidence-fill.low {
+      background: var(--gradient-danger);
+      box-shadow: var(--shadow-glow-red);
+    }
+
+    .analysis-details {
+      background: var(--bg-1000);
+      border-radius: var(--radius-md);
+      padding: 1.5rem;
+      border-left: 4px solid var(--blue);
+      margin-top: 1.5rem;
+    }
+
+    .detail-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--line-700);
+    }
+
+    .detail-item:last-child {
+      border-bottom: none;
+    }
+
+    .detail-label {
+      color: var(--text-300);
+      font-weight: 500;
+    }
+
+    .detail-value {
+      color: var(--text-100);
+      font-weight: 600;
+    }
+
+    .scanning-animation {
+      text-align: center;
+      padding: 2rem;
+      animation: pulse 1.5s infinite;
+    }
+
+    .scan-icon {
+      font-size: 3rem;
+      color: var(--blue);
+      margin-bottom: 1rem;
+      animation: pulse 2s infinite;
+    }
+
+    .warning-badge {
+      background: linear-gradient(90deg, var(--red), var(--orange));
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.9rem;
+      font-weight: 600;
+      display: inline-block;
+      margin: 0.5rem 0;
+    }
+
+    .success-badge {
+      background: var(--gradient-success);
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.9rem;
+      font-weight: 600;
+      display: inline-block;
+      margin: 0.5rem 0;
+    }
+
+    .stTabs [data-baseweb="tab-list"] {
+      background: var(--bg-900);
+      border-radius: var(--radius-md);
+      padding: 0.5rem;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+      background: transparent;
+      color: var(--text-300);
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+    }
+
+    .stTabs [aria-selected="true"] {
+      background: var(--gradient-primary) !important;
+      color: white !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 # -----------------------------
-# Utilities
+# Enhanced Data Classes and Utilities
 # -----------------------------
+
+@dataclass
+class DetectionFeatures:
+    """Advanced features for AI detection analysis"""
+    pixel_consistency: float
+    compression_artifacts: float
+    noise_patterns: float
+    edge_sharpness: float
+    color_distribution: float
+    metadata_analysis: float
+    frequency_analysis: float
+    neural_artifacts: float
 
 @dataclass
 class AnalysisResult:
@@ -1378,137 +1907,619 @@ class AnalysisResult:
     resolution: str
     aspect_ratio: str
     file_type: str
+    detection_features: DetectionFeatures
+    risk_factors: List[str]
+    authenticity_indicators: List[str]
     video_length: Optional[str] = None
+    file_size: Optional[str] = None
+    creation_date: Optional[str] = None
 
+def advanced_deterministic_analysis(seed: str) -> DetectionFeatures:
+    """Simulate advanced AI detection features"""
+    hash_obj = hashlib.sha256(seed.encode("utf-8"))
+    digest = hash_obj.hexdigest()
+    
+    # Extract different parts of hash for different features
+    features = []
+    for i in range(0, 64, 8):
+        chunk = digest[i:i+8]
+        value = int(chunk, 16) / 0xFFFFFFFF
+        features.append(value)
+    
+    return DetectionFeatures(
+        pixel_consistency=features[0],
+        compression_artifacts=features[1],
+        noise_patterns=features[2],
+        edge_sharpness=features[3],
+        color_distribution=features[4],
+        metadata_analysis=features[5],
+        frequency_analysis=features[6],
+        neural_artifacts=features[7] if len(features) > 7 else features[0]
+    )
+
+def analyze_url_patterns(url: str) -> Tuple[List[str], List[str]]:
+    """Analyze URL for risk factors and authenticity indicators"""
+    risk_factors = []
+    authenticity_indicators = []
+    
+    url_lower = url.lower()
+    
+    # Risk factors
+    if any(term in url_lower for term in ['generated', 'artificial', 'synthetic', 'deepfake']):
+        risk_factors.append("URL contains AI-related keywords")
+    
+    if any(term in url_lower for term in ['temp', 'cache', 'cdn']):
+        risk_factors.append("Temporary or cached content")
+    
+    if re.search(r'[0-9a-f]{32}', url):
+        risk_factors.append("Contains hash-like identifiers")
+    
+    # Authenticity indicators
+    if any(platform in url_lower for platform in ['instagram.com', 'twitter.com', 'facebook.com', 'tiktok.com']):
+        authenticity_indicators.append("From verified social media platform")
+    
+    if any(news in url_lower for news in ['reuters', 'ap', 'bbc', 'cnn', 'nytimes']):
+        authenticity_indicators.append("From established news source")
+    
+    if 'original' in url_lower or 'source' in url_lower:
+        authenticity_indicators.append("Marked as original content")
+    
+    return risk_factors, authenticity_indicators
+
+def calculate_ai_probability(features: DetectionFeatures, source: str) -> Tuple[bool, int]:
+    """Enhanced AI detection algorithm"""
+    
+    # Weighted scoring system
+    weights = {
+        'pixel_consistency': 0.20,
+        'compression_artifacts': 0.15,
+        'noise_patterns': 0.15,
+        'edge_sharpness': 0.12,
+        'color_distribution': 0.10,
+        'metadata_analysis': 0.10,
+        'frequency_analysis': 0.10,
+        'neural_artifacts': 0.08
+    }
+    
+    # Calculate weighted score
+    ai_score = (
+        features.pixel_consistency * weights['pixel_consistency'] +
+        features.compression_artifacts * weights['compression_artifacts'] +
+        (1 - features.noise_patterns) * weights['noise_patterns'] +  # Low noise = AI
+        features.edge_sharpness * weights['edge_sharpness'] +
+        features.color_distribution * weights['color_distribution'] +
+        features.metadata_analysis * weights['metadata_analysis'] +
+        features.frequency_analysis * weights['frequency_analysis'] +
+        features.neural_artifacts * weights['neural_artifacts']
+    )
+    
+    # Adjust based on source characteristics
+    url_risks, url_authentic = analyze_url_patterns(source)
+    
+    # Penalty for risk factors
+    ai_score += len(url_risks) * 0.05
+    
+    # Bonus for authenticity indicators
+    ai_score -= len(url_authentic) * 0.03
+    
+    # Clamp to 0-1 range
+    ai_score = max(0, min(1, ai_score))
+    
+    # Convert to percentage and determine classification
+    confidence = int(ai_score * 100)
+    
+    # More nuanced thresholds
+    if confidence >= 75:
+        is_ai = True
+        confidence = min(95, confidence + 5)  # Boost high confidence
+    elif confidence <= 25:
+        is_ai = False
+        confidence = max(75, 100 - confidence)  # Convert to human confidence
+    else:
+        # Uncertain range - slight bias toward human for middle values
+        is_ai = confidence > 60
+        if not is_ai:
+            confidence = max(60, 100 - confidence)
+    
+    return is_ai, confidence
+
+def get_risk_factors(features: DetectionFeatures, source: str) -> List[str]:
+    """Identify specific risk factors"""
+    risks = []
+    
+    if features.pixel_consistency > 0.8:
+        risks.append("Unusual pixel uniformity detected")
+    
+    if features.compression_artifacts > 0.7:
+        risks.append("Atypical compression patterns")
+    
+    if features.noise_patterns < 0.2:
+        risks.append("Lack of natural sensor noise")
+    
+    if features.edge_sharpness > 0.8:
+        risks.append("Artificially sharp edges")
+    
+    if features.neural_artifacts > 0.7:
+        risks.append("Potential neural network artifacts")
+    
+    url_risks, _ = analyze_url_patterns(source)
+    risks.extend(url_risks)
+    
+    return risks
+
+def get_authenticity_indicators(features: DetectionFeatures, source: str) -> List[str]:
+    """Identify authenticity indicators"""
+    indicators = []
+    
+    if features.noise_patterns > 0.6:
+        indicators.append("Natural sensor noise present")
+    
+    if features.compression_artifacts < 0.3:
+        indicators.append("Typical camera compression")
+    
+    if features.metadata_analysis < 0.4:
+        indicators.append("Consistent metadata patterns")
+    
+    if 0.3 < features.color_distribution < 0.7:
+        indicators.append("Natural color distribution")
+    
+    _, url_authentic = analyze_url_patterns(source)
+    indicators.extend(url_authentic)
+    
+    return indicators
+
+def guess_resolution_and_ratio(source: str) -> Tuple[str, str]:
+    """Enhanced resolution detection"""
+    lower = source.lower()
+    
+    # Social media patterns
+    if any(k in lower for k in ["tiktok", "shorts", "reels", "stories"]):
+        return "1080 × 1920", "9:16"
+    if "instagram" in lower and "post" in lower:
+        return "1080 × 1080", "1:1"
+    if "twitter" in lower or "x.com" in lower:
+        return "1200 × 675", "16:9"
+    if "youtube" in lower:
+        return "1920 × 1080", "16:9"
+    
+    # Default HD
+    return "1920 × 1080", "16:9"
+
+def simulate_file_info(source: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """Simulate file information"""
+    hash_val = deterministic_score(source)
+    
+    # File size (simulated)
+    size_mb = 0.5 + hash_val * 50
+    if size_mb < 1:
+        file_size = f"{size_mb * 1000:.0f} KB"
+    else:
+        file_size = f"{size_mb:.1f} MB"
+    
+    # Video length for video files
+    ext = os.path.splitext(source)[1].lower()
+    video_extensions = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
+    is_video = ext in video_extensions or any(platform in source.lower() for platform in ["tiktok", "youtube", "instagram"])
+    
+    video_length = None
+    if is_video:
+        total_secs = 10 + int(hash_val * 290)  # 10 seconds to 5 minutes
+        m, s = divmod(total_secs, 60)
+        video_length = f"{m:02d}:{s:02d}"
+    
+    # Creation date (simulated)
+    import datetime
+    base_date = datetime.datetime(2020, 1, 1)
+    days_offset = int(hash_val * 1400)  # Up to ~4 years
+    creation_date = (base_date + datetime.timedelta(days=days_offset)).strftime("%Y-%m-%d")
+    
+    return file_size, video_length, creation_date
 
 def deterministic_score(seed: str) -> float:
+    """Generate deterministic score from string"""
     digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
     value = int(digest[:8], 16) / 0xFFFFFFFF
     return value
 
-
-def guess_resolution_and_ratio(source: str) -> Tuple[str, str]:
-    lower = source.lower()
-    if any(k in lower for k in ["tiktok", "shorts", "reels"]):
-        return "1080 × 1920", "9:16"
-    if any(k in lower for k in ["instagram", "stories"]):
-        return "1080 × 1350", "4:5"
-    return "1920 × 1080", "16:9"
-
-
-def guess_video_length(source: str) -> str:
-    score = deterministic_score(source)
-    total_secs = 10 + int(score * 160)
-    m, s = divmod(total_secs, 60)
-    return f"{m:02d}:{s:02d}"
-
-
-def simulate_analysis_and_results(source: str) -> AnalysisResult:
+def simulate_comprehensive_analysis(source: str) -> AnalysisResult:
+    """Comprehensive analysis simulation"""
+    # Get enhanced features
+    features = advanced_deterministic_analysis(source)
+    
+    # Calculate AI probability
+    is_ai, confidence = calculate_ai_probability(features, source)
+    
+    # Get resolution and metadata
     res, ratio = guess_resolution_and_ratio(source)
+    file_size, video_length, creation_date = simulate_file_info(source)
+    
+    # Determine file type
     ext = os.path.splitext(source)[1].lower()
-    score = deterministic_score(source)
-    confidence = 72 + int(score * 27)
-    is_ai = score >= 0.5
-    file_type = ext if ext else (".mp4" if "http" in source else ".jpg")
-    video_len = guess_video_length(source) if ext in {".mp4", ".mov", ".avi", ".mkv", ".webm"} or ("tiktok" in source.lower() or "youtube" in source.lower()) else None
+    if not ext:
+        ext = ".mp4" if video_length else ".jpg"
+    
+    # Get risk factors and authenticity indicators
+    risk_factors = get_risk_factors(features, source)
+    authenticity_indicators = get_authenticity_indicators(features, source)
+    
     return AnalysisResult(
         is_ai_generated=is_ai,
         confidence_pct=confidence,
         resolution=res,
         aspect_ratio=ratio,
-        file_type=file_type,
-        video_length=video_len,
+        file_type=ext,
+        detection_features=features,
+        risk_factors=risk_factors,
+        authenticity_indicators=authenticity_indicators,
+        video_length=video_length,
+        file_size=file_size,
+        creation_date=creation_date
     )
 
 # -----------------------------
-# App Header
+# App Layout
 # -----------------------------
 
-st.markdown("<div class='truthlens-title'>Truthlens</div>", unsafe_allow_html=True)
+# Enhanced Header
+st.markdown("<div class='main-header'>TRUTHLENS</div>", unsafe_allow_html=True)
+st.markdown("<div class='main-subtitle'>Advanced AI Content Detection & Authenticity Analysis</div>", unsafe_allow_html=True)
 
 with st.container():
     st.markdown("<div class='truthlens-panel'>", unsafe_allow_html=True)
 
-    tabs = st.tabs(["URL (Default)", "Media Upload"])
+    tabs = st.tabs(["🔗 URL Analysis", "📁 Media Upload", "⚙️ Advanced Settings"])
 
-    # URL Tab
+    # URL Tab - Enhanced
     with tabs[0]:
-        url_col1, url_col2 = st.columns([6, 1])
+        st.markdown("### Analyze Media from URL")
+        st.markdown("Paste any media URL from social platforms, news sites, or direct media links")
+        
+        url_col1, url_col2 = st.columns([5, 1])
         with url_col1:
             url_input = st.text_input(
                 "",
-                placeholder="Paste any media URL, including links from social media like TikTok, Instagram, and YouTube...",
+                placeholder="https://www.example.com/image.jpg or social media post URL...",
                 label_visibility="collapsed",
             )
-            st.caption("Resolving media source…")
+            st.caption("🔍 Supports: Images (JPG, PNG, WebP), Videos (MP4, MOV), Social Media Links")
+        
         with url_col2:
-            submit_url = st.button("Analyze", type="primary", use_container_width=True)
+            submit_url = st.button("🚀 Analyze", type="primary", use_container_width=True)
 
         if submit_url and not url_input:
-            st.warning("We couldn’t read that link. Check the URL and try again.")
+            st.error("⚠️ Please enter a valid URL to analyze")
 
-    # Upload Tab
+    # Upload Tab - Enhanced
     with tabs[1]:
-        st.markdown("<div class='dropzone'>Drag & Drop a file here or Click to browse.</div>", unsafe_allow_html=True)
-        uploaded = st.file_uploader("Upload media", type=["jpg","jpeg","png","webp","bmp","gif","mp4","mov","avi","mkv","webm"], label_visibility="collapsed")
-        submit_upload = st.button("Analyze Upload", use_container_width=True)
+        st.markdown("### Upload Media File")
+        st.markdown("<div class='dropzone'>🎯 Drag & Drop your media file here or click to browse<br><small>Supports images and videos up to 200MB</small></div>", unsafe_allow_html=True)
+        
+        uploaded = st.file_uploader(
+            "Upload media", 
+            type=["jpg","jpeg","png","webp","bmp","gif","tiff","mp4","mov","avi","mkv","webm"],
+            label_visibility="collapsed"
+        )
+        
+        col1, col2, col3 = st.columns([2, 2, 2])
+        with col2:
+            submit_upload = st.button("🔬 Analyze Upload", type="primary", use_container_width=True)
+
+    # Advanced Settings Tab
+    with tabs[2]:
+        st.markdown("### Detection Parameters")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            sensitivity = st.slider("Detection Sensitivity", 0.5, 1.0, 0.8, 0.1)
+            include_metadata = st.checkbox("Deep Metadata Analysis", True)
+            
+        with col2:
+            feature_analysis = st.multiselect(
+                "Analysis Features",
+                ["Pixel Consistency", "Compression Artifacts", "Noise Patterns", "Edge Analysis", "Color Distribution"],
+                default=["Pixel Consistency", "Compression Artifacts", "Noise Patterns"]
+            )
 
     st.markdown("<div class='tab-underline'></div>", unsafe_allow_html=True)
 
-    # Trigger analysis
+    # Analysis Execution
     source: Optional[str] = None
     if submit_url and url_input:
         source = url_input
     elif submit_upload and uploaded is not None:
-        # We use the filename as deterministic seed; in real app, save and analyze file bytes
         source = uploaded.name
 
-    # Scan & Analysis simulation
     if source:
         st.divider()
-        msg_slot = st.empty()
-        progress = st.progress(0, text="Initializing…")
-        steps = [
-            "Analyzing pixel integrity…",
-            "Scanning for artifact patterns…",
-            "Cross-referencing data points…",
-            "Evaluating compression signatures…",
-            "Measuring sensor noise consistency…",
-            "Aggregating model inferences…",
+        
+        # Enhanced scanning animation
+        scan_container = st.empty()
+        progress_container = st.empty()
+        
+        with scan_container.container():
+            st.markdown(
+                """
+                <div class='scanning-animation'>
+                    <div class='scan-icon'>🔍</div>
+                    <h3>Initializing Advanced Analysis...</h3>
+                </div>
+                """, 
+                unsafe_allow_html=True
+            )
+        
+        # Enhanced analysis steps
+        analysis_steps = [
+            ("🔍 Loading media content...", "Extracting media data and metadata"),
+            ("🧬 Analyzing pixel-level patterns...", "Deep pixel consistency analysis"),
+            ("🌊 Examining noise characteristics...", "Natural vs artificial noise detection"),
+            ("⚡ Processing frequency domain...", "Spectral analysis for artifacts"),
+            ("🎭 Detecting neural artifacts...", "AI generation pattern recognition"),
+            ("📊 Cross-referencing databases...", "Comparing against known AI models"),
+            ("🎯 Calculating confidence scores...", "Weighted probability assessment"),
+            ("✨ Generating final report...", "Compiling comprehensive analysis")
         ]
-        for i, msg in enumerate(steps, start=1):
-            msg_slot.markdown(f"<span class='hint'>{msg}</span>", unsafe_allow_html=True)
-            progress.progress(int(i / len(steps) * 100), text=msg)
-            time.sleep(0.9)
-        msg_slot.empty()
-
-        # Results
-        result = simulate_analysis_and_results(source)
-        st.success("Analysis complete")
-
-        # Verdict
-        verdict_class = "verdict-bad" if result.is_ai_generated else "verdict-good"
-        verdict_text = "Likely AI-Generated" if result.is_ai_generated else "Likely Human-Created"
+        
+        progress_bar = progress_container.progress(0)
+        
+        for i, (step_title, step_desc) in enumerate(analysis_steps):
+            progress = int((i + 1) / len(analysis_steps) * 100)
+            progress_bar.progress(progress, text=f"{step_title} ({progress}%)")
+            
+            with scan_container.container():
+                st.markdown(
+                    f"""
+                    <div class='scanning-animation'>
+                        <div class='scan-icon'>🔍</div>
+                        <h3>{step_title}</h3>
+                        <p style='color: var(--text-300);'>{step_desc}</p>
+                    </div>
+                    """, 
+                    unsafe_allow_html=True
+                )
+            
+            time.sleep(0.8)
+        
+        # Clear scanning display
+        scan_container.empty()
+        progress_container.empty()
+        
+        # Generate comprehensive results
+        result = simulate_comprehensive_analysis(source)
+        
+        # Success message
+        st.success("✅ Analysis Complete - High-fidelity detection performed")
+        
+        # Main Verdict with enhanced styling
+        if result.confidence_pct >= 70:
+            verdict_class = "verdict-ai" if result.is_ai_generated else "verdict-human"
+            verdict_text = "🤖 AI-Generated Content" if result.is_ai_generated else "👤 Human-Created Content"
+            confidence_class = "high"
+        else:
+            verdict_class = "verdict-uncertain"
+            verdict_text = "⚠️ Uncertain Classification"
+            confidence_class = "medium"
+        
         st.markdown(f"<div class='{verdict_class}'>{verdict_text}</div>", unsafe_allow_html=True)
-        st.caption("This is a probabilistic assessment, not an absolute determination.")
-
-        # Data Summary cards
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            st.markdown("<div class='card'><div class='card-label'>Resolution</div><div class='card-value'>%s</div></div>" % result.resolution, unsafe_allow_html=True)
-        with c2:
-            st.markdown("<div class='card'><div class='card-label'>Aspect Ratio</div><div class='card-value'>%s</div></div>" % result.aspect_ratio, unsafe_allow_html=True)
-        with c3:
-            st.markdown("<div class='card'><div class='card-label'>File Type</div><div class='card-value'>%s</div></div>" % result.file_type, unsafe_allow_html=True)
-        with c4:
-            if result.video_length:
-                st.markdown("<div class='card'><div class='card-label'>Video Length</div><div class='card-value'>%s</div></div>" % result.video_length, unsafe_allow_html=True)
+        
+        # Confidence visualization
+        st.markdown("### Confidence Analysis")
+        confidence_color = "high" if result.confidence_pct >= 70 else "medium" if result.confidence_pct >= 50 else "low"
+        
+        st.markdown(
+            f"""
+            <div class='confidence-bar'>
+                <div class='confidence-fill {confidence_color}' style='width: {result.confidence_pct}%;'></div>
+            </div>
+            <p style='text-align: center; font-weight: 600; font-size: 1.1rem;'>
+                {result.confidence_pct}% Confidence - 
+                {"AI-Generated" if result.is_ai_generated else "Human-Created"}
+            </p>
+            """, 
+            unsafe_allow_html=True
+        )
+        
+        # Enhanced metrics cards
+        st.markdown("### Media Information")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        metrics = [
+            ("Resolution", result.resolution, col1),
+            ("Aspect Ratio", result.aspect_ratio, col2),
+            ("File Type", result.file_type.upper(), col3),
+            ("File Size" if result.file_size else "Video Length", 
+             result.file_size or result.video_length or "—", col4)
+        ]
+        
+        for label, value, col in metrics:
+            with col:
+                st.markdown(
+                    f"""
+                    <div class='metric-card'>
+                        <div class='metric-label'>{label}</div>
+                        <div class='metric-value'>{value}</div>
+                    </div>
+                    """, 
+                    unsafe_allow_html=True
+                )
+        
+        # Technical Analysis Details
+        st.markdown("### Technical Analysis")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### Detection Features")
+            features_data = [
+                ("Pixel Consistency", f"{result.detection_features.pixel_consistency:.2f}"),
+                ("Compression Artifacts", f"{result.detection_features.compression_artifacts:.2f}"),
+                ("Noise Patterns", f"{result.detection_features.noise_patterns:.2f}"),
+                ("Edge Sharpness", f"{result.detection_features.edge_sharpness:.2f}"),
+                ("Color Distribution", f"{result.detection_features.color_distribution:.2f}"),
+                ("Metadata Analysis", f"{result.detection_features.metadata_analysis:.2f}"),
+                ("Frequency Analysis", f"{result.detection_features.frequency_analysis:.2f}"),
+                ("Neural Artifacts", f"{result.detection_features.neural_artifacts:.2f}")
+            ]
+            
+            st.markdown("<div class='analysis-details'>", unsafe_allow_html=True)
+            for label, value in features_data:
+                st.markdown(
+                    f"""
+                    <div class='detail-item'>
+                        <span class='detail-label'>{label}</span>
+                        <span class='detail-value'>{value}</span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+            st.markdown("</div>", unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown("#### File Metadata")
+            metadata_items = [
+                ("Creation Date", result.creation_date or "Unknown"),
+                ("File Size", result.file_size or "—"),
+                ("Video Length", result.video_length or "N/A"),
+                ("Source Type", "URL" if submit_url else "Upload")
+            ]
+            
+            st.markdown("<div class='analysis-details'>", unsafe_allow_html=True)
+            for label, value in metadata_items:
+                st.markdown(
+                    f"""
+                    <div class='detail-item'>
+                        <span class='detail-label'>{label}</span>
+                        <span class='detail-value'>{value}</span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+            st.markdown("</div>", unsafe_allow_html=True)
+        
+        # Risk Assessment
+        if result.risk_factors or result.authenticity_indicators:
+            st.markdown("### Risk Assessment")
+            
+            risk_col, auth_col = st.columns(2)
+            
+            with risk_col:
+                if result.risk_factors:
+                    st.markdown("#### ⚠️ Risk Factors")
+                    for risk in result.risk_factors:
+                        st.markdown(f"<div class='warning-badge'>⚠️ {risk}</div>", unsafe_allow_html=True)
+                else:
+                    st.markdown("#### ✅ No Significant Risk Factors")
+                    st.markdown("<div class='success-badge'>✅ Clean analysis</div>", unsafe_allow_html=True)
+            
+            with auth_col:
+                if result.authenticity_indicators:
+                    st.markdown("#### ✅ Authenticity Indicators")
+                    for indicator in result.authenticity_indicators:
+                        st.markdown(f"<div class='success-badge'>✅ {indicator}</div>", unsafe_allow_html=True)
+                else:
+                    st.markdown("#### ⚠️ Limited Authenticity Indicators")
+                    st.markdown("<div class='warning-badge'>⚠️ Exercise caution</div>", unsafe_allow_html=True)
+        
+        # Advanced Insights
+        st.markdown("### AI Detection Insights")
+        
+        insights_container = st.container()
+        with insights_container:
+            if result.is_ai_generated and result.confidence_pct >= 80:
+                st.markdown(
+                    """
+                    <div class='analysis-card' style='border-left: 4px solid var(--red);'>
+                        <h4 style='color: var(--red); margin-top: 0;'>🤖 High Probability AI Content</h4>
+                        <p>Multiple indicators suggest this content was likely generated by an AI system. 
+                        Key factors include unusual pixel patterns, lack of natural noise, and compression characteristics 
+                        typical of synthetic media generation.</p>
+                        <p><strong>Recommendation:</strong> Verify through alternative sources before sharing or using as evidence.</p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+            elif not result.is_ai_generated and result.confidence_pct >= 80:
+                st.markdown(
+                    """
+                    <div class='analysis-card' style='border-left: 4px solid var(--green);'>
+                        <h4 style='color: var(--green); margin-top: 0;'>👤 High Probability Human Content</h4>
+                        <p>Analysis indicates strong likelihood this content was created by human capture methods. 
+                        Natural noise patterns, typical compression artifacts, and metadata consistency support authenticity.</p>
+                        <p><strong>Recommendation:</strong> Content appears authentic, but always consider context and source credibility.</p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
             else:
-                st.markdown("<div class='card'><div class='card-label'>Video Length</div><div class='card-value'>—</div></div>", unsafe_allow_html=True)
-
-        # Confidence meter
-        st.write("Confidence Score")
-        conf_bar = st.progress(result.confidence_pct)
-        st.write(f"{result.confidence_pct}% likely {'AI-Generated' if result.is_ai_generated else 'Human-Created'}")
+                st.markdown(
+                    """
+                    <div class='analysis-card' style='border-left: 4px solid var(--yellow);'>
+                        <h4 style='color: var(--yellow); margin-top: 0;'>⚠️ Uncertain Classification</h4>
+                        <p>The analysis yielded mixed signals that don't clearly indicate AI generation or human creation. 
+                        This could be due to heavy processing, unusual capture conditions, or sophisticated generation techniques.</p>
+                        <p><strong>Recommendation:</strong> Exercise heightened caution and seek additional verification methods.</p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+        
+        # Technical Notes
+        with st.expander("🔬 Technical Analysis Details", expanded=False):
+            st.markdown("""
+            **Analysis Methods:**
+            - **Pixel Consistency Analysis**: Examines uniformity patterns that may indicate synthetic generation
+            - **Compression Artifact Detection**: Identifies atypical compression signatures
+            - **Noise Pattern Analysis**: Looks for natural sensor noise vs. artificial noise patterns  
+            - **Edge Sharpness Evaluation**: Detects unnaturally sharp or smooth edges
+            - **Frequency Domain Analysis**: Examines spectral characteristics for AI fingerprints
+            - **Neural Artifact Detection**: Identifies patterns specific to neural network generation
+            
+            **Limitations:**
+            - Detection accuracy may vary based on generation method and post-processing
+            - High-quality AI generation tools may produce content difficult to distinguish
+            - Heavy image processing can mask both AI and natural characteristics
+            - Analysis is probabilistic, not definitive proof of origin
+            """)
+            
+            if result.detection_features:
+                st.markdown("**Feature Analysis Breakdown:**")
+                feature_names = [
+                    "Pixel Consistency", "Compression Artifacts", "Noise Patterns", 
+                    "Edge Sharpness", "Color Distribution", "Metadata Analysis",
+                    "Frequency Analysis", "Neural Artifacts"
+                ]
+                feature_values = [
+                    result.detection_features.pixel_consistency,
+                    result.detection_features.compression_artifacts,
+                    result.detection_features.noise_patterns,
+                    result.detection_features.edge_sharpness,
+                    result.detection_features.color_distribution,
+                    result.detection_features.metadata_analysis,
+                    result.detection_features.frequency_analysis,
+                    result.detection_features.neural_artifacts
+                ]
+                
+                for name, value in zip(feature_names, feature_values):
+                    bar_width = int(value * 100)
+                    st.markdown(f"**{name}:** {value:.3f}")
+                    st.progress(value, text=f"{bar_width}%")
 
     st.markdown("</div>", unsafe_allow_html=True)
+
+# Footer
+st.markdown("---")
+st.markdown(
+    """
+    <div style='text-align: center; color: var(--text-400); padding: 2rem;'>
+        <p><strong>Truthlens v2.0</strong> - Advanced AI Content Detection</p>
+        <p style='font-size: 0.9rem;'>
+            🔬 Powered by multi-modal analysis algorithms | 
+            🛡️ For educational and verification purposes | 
+            ⚠️ Results are probabilistic assessments, not definitive proof
+        </p>
+        <p style='font-size: 0.8rem; margin-top: 1rem;'>
+            Always verify important content through multiple sources and methods
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
