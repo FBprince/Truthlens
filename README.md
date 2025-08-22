@@ -1,46 +1,60 @@
-# Truthlens — Misinformation Scanner (Desktop, PySide6)
+# Truthlens — Misinformation Scanner
 
-A desktop application concept that helps analyze images/videos to assess whether they are likely human-created or AI-generated. This implementation focuses on the complete UI/UX and an analysis simulation so you can run and demo the flows end-to-end.
+A desktop and web (Streamlit) application concept that helps analyze images/videos to assess whether they are likely human-created or AI-generated. This project ships with:
+- A Streamlit web app (`streamlit_app.py`) ready for deployment on Streamlit Community Cloud or GitHub Codespaces
+- An optional PySide6 desktop app (`truthlens_app.py`) for local demos
 
 ## Features
 - URL and Media Upload tabs with animated, neon-themed dark UI
-- Drag & Drop file upload or click-to-browse
+- Drag & Drop file upload or click-to-browse (Streamlit’s uploader)
 - Animated scanning screen with rotating analysis messages
 - Results dashboard with clear verdict, data summary cards, and confidence meter
-- Keyboard accessible, with focus rings and Enter-to-submit
 - Deterministic, offline analysis simulation (no external APIs)
 
 ## Tech
 - Python 3.9+
-- PySide6 (Qt for Python)
+- Streamlit (web)
+- PySide6 (optional desktop)
 
 ## Install
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-## Run
+## Run — Streamlit (web)
+```bash
+streamlit run streamlit_app.py
+```
+Open the printed local URL in your browser.
+
+## Deploy — Streamlit Community Cloud
+1. Push this repo to GitHub
+2. Go to Streamlit Community Cloud, create a new app
+3. Select your repo and set the entry point to `streamlit_app.py`
+4. Framework auto-installs from `requirements.txt`
+
+## Optional — Run desktop (PySide6)
 ```bash
 python truthlens_app.py
 ```
-
-If running on a headless machine (CI), you can launch in offscreen mode:
+If running on headless CI:
 ```bash
 QT_QPA_PLATFORM=offscreen python truthlens_app.py --smoke-test
 ```
 
 ## Notes
-- The app simulates analysis with a progress/spinner and rotating messages, then computes a deterministic verdict and confidence based on the input (URL string or file path). This is for demo/UI purposes only.
-- To plug in a real detector: replace `simulate_analysis_and_results()` and wire your media parsing and model inference where indicated in comments.
+- The app simulates analysis with a progress/progress bar and rotating messages, then computes a deterministic verdict and confidence based on the input (URL string or filename). This is for demo/UI purposes only.
+- To plug in a real detector: replace `simulate_analysis_and_results()` in `streamlit_app.py` and/or `truthlens_app.py` and wire your media parsing and model inference.
 
 ## Project Structure
 ```
 requirements.txt
 README.md
-truthlens_app.py
+streamlit_app.py
+truthlens_app.py  # optional desktop
 ```
 
 ## License
