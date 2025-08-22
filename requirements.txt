@@ -1,16 +1,4 @@
-streamlit
-torch
-torchvision
-transformers
-timm
-Pillow
-numpy
-opencv-python-headless
-requests
-beautifulsoup4
-youtube_dl
-pytube
-pytube3
+PySide6==6.7.2
 
 
 
