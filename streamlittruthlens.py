@@ -4472,7 +4472,6 @@ import os
 import time
 import re
 import numpy as np
-import cv2
 from dataclasses import dataclass
 from typing import Optional, Tuple, List, Dict, Union
 from PIL import Image, ExifTags
@@ -5762,3 +5761,4 @@ if __name__ == "__main__":
     except Exception as e:
         st.error(f"Application error: {str(e)}")
         st.error("Please refresh the page and try again.")
+
