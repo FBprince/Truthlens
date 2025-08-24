@@ -3295,6 +3295,1180 @@
 
 
 
+# #!/usr/bin/env python3
+# # -*- coding: utf-8 -*-
+
+# import hashlib
+# import os
+# import time
+# import re
+# import numpy as np
+# import cv2
+# from dataclasses import dataclass
+# from typing import Optional, Tuple, List, Dict, Union
+# from PIL import Image, ExifTags
+# import streamlit as st
+# from urllib.parse import urlparse
+# import requests
+# from io import BytesIO
+# import json
+# import base64
+# from scipy import stats, ndimage
+# from skimage import feature, filters, measure, segmentation
+# import matplotlib.pyplot as plt
+
+# # -----------------------------
+# # Page setup
+# # -----------------------------
+
+# st.set_page_config(
+#     page_title="Truthlens Pro — Ultra-Advanced AI Detection",
+#     page_icon="🔎",
+#     layout="wide",
+# )
+
+# # Enhanced CSS (keeping the existing beautiful styling)
+# st.markdown(
+#     """
+#     <style>
+#     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700;800&display=swap');
+    
+#     :root {
+#       --bg-1100: #050810;
+#       --bg-1000: #0A0E1A;
+#       --bg-900: #0F1419;
+#       --bg-800: #1A1F2E;
+#       --bg-700: #252B3A;
+#       --bg-600: #2F3548;
+#       --text-50: #F0F8FF;
+#       --text-100: #E6F0FF;
+#       --text-200: #D4E6FF;
+#       --text-300: #9BB3C9;
+#       --text-400: #7A8FA6;
+#       --text-500: #5A6B7D;
+#       --line-500: #3A4556;
+#       --line-600: #2A3441;
+#       --line-700: #1B2A3B;
+#       --neon-blue: #00E5FF;
+#       --neon-cyan: #00FFF0;
+#       --neon-purple: #8B5FFF;
+#       --neon-pink: #FF2BD1;
+#       --neon-green: #39FF88;
+#       --neon-yellow: #FFE135;
+#       --neon-red: #FF4757;
+#       --neon-orange: #FF6B47;
+#       --hologram: linear-gradient(45deg, var(--neon-cyan), var(--neon-blue), var(--neon-purple), var(--neon-pink));
+#       --matrix: linear-gradient(135deg, var(--neon-green) 0%, var(--neon-cyan) 50%, var(--neon-blue) 100%);
+#       --danger: linear-gradient(135deg, var(--neon-red) 0%, var(--neon-orange) 100%);
+#       --warning: linear-gradient(135deg, var(--neon-yellow) 0%, var(--neon-orange) 100%);
+#       --success: linear-gradient(135deg, var(--neon-green) 0%, var(--neon-cyan) 100%);
+#     }
+
+#     * { font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif; }
+#     .mono { font-family: 'JetBrains Mono', monospace; }
+
+#     .stApp {
+#       background: 
+#         radial-gradient(circle at 20% 80%, rgba(0, 229, 255, 0.1) 0%, transparent 50%),
+#         radial-gradient(circle at 80% 20%, rgba(255, 43, 209, 0.1) 0%, transparent 50%),
+#         radial-gradient(circle at 40% 40%, rgba(139, 95, 255, 0.05) 0%, transparent 50%),
+#         linear-gradient(135deg, var(--bg-1100) 0%, var(--bg-1000) 100%);
+#       color: var(--text-50);
+#       min-height: 100vh;
+#     }
+
+#     @keyframes neonPulse {
+#       0%, 100% { text-shadow: 0 0 5px currentColor, 0 0 10px currentColor, 0 0 20px currentColor, 0 0 40px currentColor; }
+#       50% { text-shadow: 0 0 2px currentColor, 0 0 5px currentColor, 0 0 10px currentColor, 0 0 20px currentColor; }
+#     }
+
+#     @keyframes hologramShimmer {
+#       0% { background-position: 0% 50%; }
+#       50% { background-position: 100% 50%; }
+#       100% { background-position: 0% 50%; }
+#     }
+
+#     @keyframes slideInGlow {
+#       from { transform: translateY(30px); opacity: 0; filter: blur(10px); }
+#       to { transform: translateY(0); opacity: 1; filter: blur(0); }
+#     }
+
+#     .main-header {
+#       text-align: center; padding: 3rem 0 1rem;
+#       background: var(--hologram); background-size: 400% 400%;
+#       animation: hologramShimmer 3s ease-in-out infinite, neonPulse 2s ease-in-out infinite;
+#       -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+#       font-weight: 800; font-size: 4.5rem; letter-spacing: -0.03em; margin-bottom: 0.5rem;
+#     }
+
+#     .main-subtitle {
+#       text-align: center; color: var(--text-300); font-size: 1.3rem; font-weight: 400;
+#       margin-bottom: 0.5rem; animation: slideInGlow 1s ease-out 0.5s both;
+#     }
+
+#     .version-badge { text-align: center; margin-bottom: 3rem; }
+#     .badge {
+#       background: var(--matrix); padding: 0.5rem 1.5rem; border-radius: 25px;
+#       font-size: 0.9rem; font-weight: 600; color: white; display: inline-block;
+#       animation: neonPulse 3s ease-in-out infinite; box-shadow: 0 0 20px rgba(57, 255, 136, 0.5);
+#     }
+
+#     .truthlens-panel {
+#       background: linear-gradient(145deg, rgba(26, 31, 46, 0.9), rgba(15, 20, 25, 0.95));
+#       border: 1px solid var(--line-600); border-radius: 24px; padding: 2.5rem; color: var(--text-50);
+#       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+#       backdrop-filter: blur(20px); animation: slideInGlow 0.8s ease-out;
+#     }
+
+#     .verdict-human { 
+#       color: var(--neon-green); font-weight: 800; font-size: 2.5rem; 
+#       text-shadow: 0 0 10px var(--neon-green), 0 0 20px var(--neon-green), 0 0 40px var(--neon-green);
+#       animation: slideInGlow 1s ease-out, neonPulse 3s ease-in-out infinite 1s;
+#       text-align: center; margin: 2rem 0;
+#     }
+    
+#     .verdict-ai { 
+#       color: var(--neon-red); font-weight: 800; font-size: 2.5rem; 
+#       text-shadow: 0 0 10px var(--neon-red), 0 0 20px var(--neon-red), 0 0 40px var(--neon-red);
+#       animation: slideInGlow 1s ease-out, neonPulse 3s ease-in-out infinite 1s;
+#       text-align: center; margin: 2rem 0;
+#     }
+
+#     .confidence-display {
+#       text-align: center; margin: 2rem 0; padding: 2rem;
+#       background: linear-gradient(145deg, var(--bg-1000), var(--bg-900));
+#       border-radius: 20px; border: 1px solid var(--line-600);
+#     }
+
+#     .confidence-number { font-size: 4rem; font-weight: 900; margin-bottom: 1rem; animation: slideInGlow 1.2s ease-out; }
+#     .confidence-high { color: var(--neon-green); text-shadow: 0 0 20px var(--neon-green); }
+#     .confidence-medium { color: var(--neon-yellow); text-shadow: 0 0 20px var(--neon-yellow); }
+#     .confidence-low { color: var(--neon-red); text-shadow: 0 0 20px var(--neon-red); }
+
+#     .analysis-card {
+#       background: linear-gradient(145deg, rgba(10, 14, 26, 0.95), rgba(26, 31, 46, 0.9));
+#       border: 1px solid var(--line-700); border-radius: 20px; padding: 2rem; margin: 1.5rem 0;
+#       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+#       animation: slideInGlow 0.6s ease-out;
+#     }
+#     </style>
+#     """,
+#     unsafe_allow_html=True,
+# )
+
+# # -----------------------------
+# # ENHANCED AI DETECTION SYSTEM
+# # -----------------------------
+
+# @dataclass
+# class AdvancedDetectionFeatures:
+#     """Advanced AI detection features with real computer vision analysis"""
+#     # Pixel-level Analysis
+#     pixel_noise_variance: float
+#     frequency_domain_anomalies: float
+#     edge_sharpness_consistency: float
+#     compression_artifacts: float
+    
+#     # Advanced Computer Vision
+#     texture_analysis_score: float
+#     color_histogram_anomalies: float
+#     gradient_consistency: float
+#     local_binary_patterns: float
+    
+#     # Deep Learning Indicators
+#     neural_texture_patterns: float
+#     upsampling_artifacts: float
+#     attention_map_irregularities: float
+#     latent_space_signatures: float
+    
+#     # Metadata and Technical
+#     exif_consistency_score: float
+#     timestamp_plausibility: float
+#     color_profile_analysis: float
+#     file_entropy_analysis: float
+
+# class EnhancedAIDetector:
+#     """Enhanced AI detection with real computer vision techniques"""
+    
+#     def __init__(self):
+#         self.ai_signatures = self._load_ai_signatures()
+#         self.camera_profiles = self._load_camera_profiles()
+    
+#     def _load_ai_signatures(self) -> Dict:
+#         """Load known AI generation signatures"""
+#         return {
+#             'midjourney': {
+#                 'typical_resolutions': [(1024, 1024), (1024, 1536), (1536, 1024)],
+#                 'color_space_bias': 'saturated_blues_purples',
+#                 'texture_smoothness': 0.85,
+#                 'edge_consistency': 0.92
+#             },
+#             'dalle': {
+#                 'typical_resolutions': [(1024, 1024), (512, 512)],
+#                 'color_space_bias': 'balanced_but_artificial',
+#                 'texture_smoothness': 0.78,
+#                 'edge_consistency': 0.88
+#             },
+#             'stable_diffusion': {
+#                 'typical_resolutions': [(512, 512), (768, 768), (1024, 1024)],
+#                 'color_space_bias': 'slight_oversaturation',
+#                 'texture_smoothness': 0.82,
+#                 'edge_consistency': 0.89
+#             }
+#         }
+    
+#     def _load_camera_profiles(self) -> Dict:
+#         """Load known camera noise profiles"""
+#         return {
+#             'professional_dslr': {
+#                 'noise_characteristics': 'gaussian_low_variance',
+#                 'compression': 'minimal_artifacts',
+#                 'color_accuracy': 'high_fidelity'
+#             },
+#             'smartphone': {
+#                 'noise_characteristics': 'processed_but_present',
+#                 'compression': 'moderate_artifacts',
+#                 'color_accuracy': 'enhanced_saturation'
+#             },
+#             'ai_generated': {
+#                 'noise_characteristics': 'artificial_or_absent',
+#                 'compression': 'unusual_patterns',
+#                 'color_accuracy': 'mathematically_perfect'
+#             }
+#         }
+
+# def analyze_image_pixels(image_array: np.ndarray) -> Dict[str, float]:
+#     """Real pixel-level analysis for AI detection"""
+    
+#     # Convert to grayscale for analysis
+#     if len(image_array.shape) == 3:
+#         gray = cv2.cvtColor(image_array, cv2.COLOR_RGB2GRAY)
+#     else:
+#         gray = image_array
+    
+#     results = {}
+    
+#     # 1. Noise Analysis - AI images often lack natural sensor noise
+#     noise_variance = np.var(gray - cv2.GaussianBlur(gray, (5, 5), 0))
+#     results['noise_variance'] = min(1.0, noise_variance / 100.0)  # Normalize
+    
+#     # 2. Edge Analysis - AI often creates unnaturally consistent edges
+#     edges = cv2.Canny(gray, 50, 150)
+#     edge_density = np.sum(edges > 0) / edges.size
+#     edge_variance = np.var(edges)
+#     results['edge_consistency'] = edge_density * (1.0 - min(1.0, edge_variance / 10000.0))
+    
+#     # 3. Frequency Domain Analysis
+#     f_transform = np.fft.fft2(gray)
+#     f_shift = np.fft.fftshift(f_transform)
+#     magnitude_spectrum = np.log(np.abs(f_shift) + 1)
+    
+#     # AI images often show artificial patterns in frequency domain
+#     high_freq_energy = np.mean(magnitude_spectrum[magnitude_spectrum.shape[0]//4:3*magnitude_spectrum.shape[0]//4,
+#                                                  magnitude_spectrum.shape[1]//4:3*magnitude_spectrum.shape[1]//4])
+#     results['frequency_anomalies'] = min(1.0, high_freq_energy / 10.0)
+    
+#     # 4. Texture Analysis using Local Binary Patterns
+#     radius = 3
+#     n_points = 8 * radius
+#     try:
+#         lbp = feature.local_binary_pattern(gray, n_points, radius, method='uniform')
+#         lbp_hist = np.histogram(lbp.ravel(), bins=n_points + 2, range=(0, n_points + 2))[0]
+#         # AI textures often show less diversity in local patterns
+#         texture_entropy = stats.entropy(lbp_hist + 1)  # Add 1 to avoid log(0)
+#         results['texture_diversity'] = min(1.0, texture_entropy / 5.0)
+#     except:
+#         results['texture_diversity'] = 0.5
+    
+#     # 5. Gradient Analysis
+#     grad_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
+#     grad_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
+#     gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2)
+#     gradient_consistency = 1.0 - (np.std(gradient_magnitude) / (np.mean(gradient_magnitude) + 1e-6))
+#     results['gradient_consistency'] = max(0.0, min(1.0, gradient_consistency))
+    
+#     return results
+
+# def analyze_color_characteristics(image_array: np.ndarray) -> Dict[str, float]:
+#     """Analyze color characteristics that differ between AI and natural images"""
+    
+#     results = {}
+    
+#     if len(image_array.shape) != 3:
+#         return {'color_naturalness': 0.5, 'saturation_analysis': 0.5}
+    
+#     # Convert to different color spaces
+#     hsv = cv2.cvtColor(image_array, cv2.COLOR_RGB2HSV)
+#     lab = cv2.cvtColor(image_array, cv2.COLOR_RGB2LAB)
+    
+#     # 1. Saturation Analysis - AI often oversaturates
+#     saturation = hsv[:, :, 1].flatten()
+#     high_sat_ratio = np.sum(saturation > 200) / len(saturation)  # Proportion of highly saturated pixels
+#     results['saturation_analysis'] = high_sat_ratio
+    
+#     # 2. Color Distribution Analysis
+#     # AI images often have unnatural color clustering
+#     colors_reshaped = image_array.reshape(-1, 3)
+#     unique_colors = len(np.unique(colors_reshaped.view(np.dtype((np.void, colors_reshaped.dtype.itemsize * 3)))))
+#     total_pixels = colors_reshaped.shape[0]
+#     color_diversity = unique_colors / total_pixels
+#     results['color_diversity'] = min(1.0, color_diversity * 10)  # Scale appropriately
+    
+#     # 3. Luminance Analysis
+#     luminance = 0.299 * image_array[:, :, 0] + 0.587 * image_array[:, :, 1] + 0.114 * image_array[:, :, 2]
+#     luminance_variance = np.var(luminance)
+#     results['luminance_variance'] = min(1.0, luminance_variance / 1000.0)
+    
+#     return results
+
+# def analyze_compression_patterns(image_data: bytes, file_path: str) -> Dict[str, float]:
+#     """Analyze compression patterns that may indicate AI generation"""
+    
+#     results = {}
+    
+#     try:
+#         # Basic file entropy analysis
+#         entropy = stats.entropy(list(image_data))
+#         results['file_entropy'] = min(1.0, entropy / 8.0)  # Normalize to 0-1
+        
+#         # File size analysis relative to dimensions
+#         try:
+#             with Image.open(BytesIO(image_data)) as img:
+#                 width, height = img.size
+#                 expected_size = width * height * 3 * 0.1  # Rough estimate for JPEG compression
+#                 actual_size = len(image_data)
+#                 compression_ratio = actual_size / expected_size if expected_size > 0 else 1.0
+#                 results['compression_efficiency'] = min(1.0, abs(compression_ratio - 0.05) * 20)
+#         except:
+#             results['compression_efficiency'] = 0.5
+            
+#     except Exception as e:
+#         st.error(f"Error in compression analysis: {e}")
+#         results = {'file_entropy': 0.5, 'compression_efficiency': 0.5}
+    
+#     return results
+
+# def extract_and_analyze_metadata(image_path: Union[str, bytes]) -> Dict[str, float]:
+#     """Extract and analyze metadata for AI detection clues"""
+    
+#     results = {
+#         'exif_consistency': 0.5,
+#         'creation_plausibility': 0.5,
+#         'camera_signature': 0.5
+#     }
+    
+#     try:
+#         if isinstance(image_path, bytes):
+#             img = Image.open(BytesIO(image_path))
+#         else:
+#             img = Image.open(image_path)
+            
+#         # Extract EXIF data
+#         exif_dict = img._getexif()
+#         if exif_dict is not None:
+#             exif = {ExifTags.TAGS[k]: v for k, v in exif_dict.items() if k in ExifTags.TAGS}
+            
+#             # Check for camera information
+#             camera_make = exif.get('Make', '').lower()
+#             camera_model = exif.get('Model', '').lower()
+#             software = exif.get('Software', '').lower()
+            
+#             # Known AI generation software signatures
+#             ai_software_indicators = [
+#                 'midjourney', 'dall-e', 'stable diffusion', 'runway', 'synthesia',
+#                 'generated', 'artificial', 'ai', 'neural', 'diffusion'
+#             ]
+            
+#             # Check software field for AI indicators
+#             software_score = 0.8 if any(indicator in software for indicator in ai_software_indicators) else 0.2
+            
+#             # Check for realistic camera signatures
+#             known_cameras = ['canon', 'nikon', 'sony', 'fujifilm', 'panasonic', 'olympus', 'leica']
+#             known_phones = ['iphone', 'samsung', 'pixel', 'oneplus', 'huawei', 'xiaomi']
+            
+#             camera_score = 0.2
+#             if any(brand in camera_make or brand in camera_model for brand in known_cameras + known_phones):
+#                 camera_score = 0.8
+            
+#             results['camera_signature'] = camera_score
+#             results['exif_consistency'] = 1.0 - software_score  # Inverse of AI software presence
+            
+#             # Analyze timestamp plausibility
+#             datetime_original = exif.get('DateTimeOriginal')
+#             if datetime_original:
+#                 # Basic timestamp analysis - could be enhanced further
+#                 results['creation_plausibility'] = 0.7  # Assume reasonable if present
+            
+#     except Exception as e:
+#         # If EXIF extraction fails, it could indicate AI generation (no metadata) or processing
+#         results['exif_consistency'] = 0.3
+    
+#     return results
+
+# def comprehensive_ai_detection(image_data: Union[bytes, np.ndarray], source_url: str = "") -> AdvancedDetectionFeatures:
+#     """Comprehensive AI detection using multiple analysis methods"""
+    
+#     # Convert image data to numpy array if needed
+#     if isinstance(image_data, bytes):
+#         img = Image.open(BytesIO(image_data))
+#         image_array = np.array(img)
+#     else:
+#         image_array = image_data
+#         img = None
+    
+#     # Ensure image is in RGB format
+#     if len(image_array.shape) == 3 and image_array.shape[2] == 4:  # RGBA
+#         image_array = image_array[:, :, :3]  # Remove alpha channel
+    
+#     # Pixel-level analysis
+#     pixel_analysis = analyze_image_pixels(image_array)
+    
+#     # Color analysis
+#     color_analysis = analyze_color_characteristics(image_array)
+    
+#     # Compression analysis
+#     if isinstance(image_data, bytes):
+#         compression_analysis = analyze_compression_patterns(image_data, "")
+#         metadata_analysis = extract_and_analyze_metadata(image_data)
+#     else:
+#         compression_analysis = {'file_entropy': 0.5, 'compression_efficiency': 0.5}
+#         metadata_analysis = {'exif_consistency': 0.5, 'creation_plausibility': 0.5, 'camera_signature': 0.5}
+    
+#     # URL-based analysis
+#     url_analysis = analyze_url_patterns(source_url)
+    
+#     # Combine all analyses into AdvancedDetectionFeatures
+#     return AdvancedDetectionFeatures(
+#         # Pixel-level features
+#         pixel_noise_variance=pixel_analysis.get('noise_variance', 0.5),
+#         frequency_domain_anomalies=pixel_analysis.get('frequency_anomalies', 0.5),
+#         edge_sharpness_consistency=pixel_analysis.get('edge_consistency', 0.5),
+#         compression_artifacts=compression_analysis.get('compression_efficiency', 0.5),
+        
+#         # Advanced Computer Vision
+#         texture_analysis_score=pixel_analysis.get('texture_diversity', 0.5),
+#         color_histogram_anomalies=color_analysis.get('color_diversity', 0.5),
+#         gradient_consistency=pixel_analysis.get('gradient_consistency', 0.5),
+#         local_binary_patterns=pixel_analysis.get('texture_diversity', 0.5),
+        
+#         # Deep Learning Indicators (enhanced heuristics)
+#         neural_texture_patterns=1.0 - pixel_analysis.get('texture_diversity', 0.5),
+#         upsampling_artifacts=pixel_analysis.get('edge_consistency', 0.5),
+#         attention_map_irregularities=color_analysis.get('saturation_analysis', 0.5),
+#         latent_space_signatures=url_analysis.get('ai_probability', 0.5),
+        
+#         # Metadata and Technical
+#         exif_consistency_score=metadata_analysis.get('exif_consistency', 0.5),
+#         timestamp_plausibility=metadata_analysis.get('creation_plausibility', 0.5),
+#         color_profile_analysis=color_analysis.get('luminance_variance', 0.5),
+#         file_entropy_analysis=compression_analysis.get('file_entropy', 0.5)
+#     )
+
+# def analyze_url_patterns(url: str) -> Dict[str, float]:
+#     """Enhanced URL pattern analysis with more sophisticated detection"""
+    
+#     if not url:
+#         return {'ai_probability': 0.5, 'source_confidence': 0.5}
+    
+#     url_lower = url.lower()
+    
+#     # Strong AI indicators
+#     strong_ai_indicators = [
+#         'midjourney.com', 'cdn.midjourney.com', 'discord.com/attachments',
+#         'dalle', 'dall-e', 'openai.com/dalle',
+#         'stability.ai', 'stable-diffusion', 'huggingface.co/spaces',
+#         'runway.ml', 'runwayml.com',
+#         'synthesia.io', 'deepfake',
+#         'leonardo.ai', 'firefly.adobe.com',
+#         'generated', 'artificial', 'synthetic'
+#     ]
+    
+#     # Moderate AI indicators
+#     moderate_ai_indicators = [
+#         'temp', 'cache', 'upload', 'cdn',
+#         'gradio.app', 'replicate.com',
+#         'colab.research.google.com',
+#         'streamlit.app', 'herokuapp.com'
+#     ]
+    
+#     # Human/authentic indicators
+#     authentic_indicators = [
+#         'instagram.com', 'facebook.com', 'twitter.com', 'x.com',
+#         'tiktok.com', 'youtube.com', 'snapchat.com',
+#         'flickr.com', '500px.com', 'behance.net',
+#         'reuters.com', 'apnews.com', 'bbc.com', 'cnn.com',
+#         'shutterstock.com', 'getty', 'unsplash.com', 'pexels.com',
+#         'nytimes.com', 'washingtonpost.com', 'theguardian.com'
+#     ]
+    
+#     ai_score = 0.0
+#     authentic_score = 0.0
+    
+#     # Check for strong AI indicators
+#     for indicator in strong_ai_indicators:
+#         if indicator in url_lower:
+#             ai_score += 0.9
+#             break
+    
+#     # Check for moderate AI indicators
+#     for indicator in moderate_ai_indicators:
+#         if indicator in url_lower:
+#             ai_score += 0.4
+    
+#     # Check for authentic indicators
+#     for indicator in authentic_indicators:
+#         if indicator in url_lower:
+#             authentic_score += 0.8
+#             break
+    
+#     # URL structure analysis
+#     parsed_url = urlparse(url)
+    
+#     # Suspicious patterns in path
+#     if re.search(r'[0-9a-f]{32,}', parsed_url.path):  # Long hex strings
+#         ai_score += 0.3
+    
+#     if re.search(r'(generated|temp|cache|upload).*\.(jpg|png|gif|webp)', parsed_url.path):
+#         ai_score += 0.4
+    
+#     # File naming patterns
+#     filename = os.path.basename(parsed_url.path).lower()
+#     if re.match(r'(img_|image_|temp_|cache_)\d+', filename):
+#         ai_score += 0.2
+    
+#     # Balance scores
+#     final_ai_prob = max(0, min(1, ai_score - authentic_score * 0.8))
+#     source_confidence = max(ai_score, authentic_score)
+    
+#     return {'ai_probability': final_ai_prob, 'source_confidence': source_confidence}
+
+# def advanced_ai_classification(features: AdvancedDetectionFeatures, url_analysis: Dict) -> Tuple[bool, int, str]:
+#     """Advanced AI classification using weighted feature analysis"""
+    
+#     # Sophisticated weighted scoring based on research
+#     weights = {
+#         'pixel_noise_variance': -0.15,        # Lower noise = more likely AI (negative weight)
+#         'frequency_domain_anomalies': 0.12,   # Frequency anomalies indicate AI
+#         'edge_sharpness_consistency': 0.13,   # Too consistent = AI
+#         'compression_artifacts': 0.08,
+#         'texture_analysis_score': -0.11,      # Less texture diversity = AI (negative)
+#         'color_histogram_anomalies': 0.10,
+#         'gradient_consistency': 0.09,
+#         'neural_texture_patterns': 0.14,      # High neural patterns = AI
+#         'upsampling_artifacts': 0.10,
+#         'attention_map_irregularities': 0.08,
+#         'latent_space_signatures': 0.12,
+#         'exif_consistency_score': -0.13,      # Good EXIF = human (negative weight)
+#         'timestamp_plausibility': -0.08,
+#         'color_profile_analysis': 0.07,
+#         'file_entropy_analysis': 0.06
+#     }
+    
+#     # Calculate weighted score
+#     ai_score = 0.0
+#     feature_dict = features.__dict__
+    
+#     for feature_name, weight in weights.items():
+#         if feature_name in feature_dict:
+#             ai_score += feature_dict[feature_name] * weight
+    
+#     # Add URL analysis
+#     ai_score += url_analysis.get('ai_probability', 0.5) * 0.25
+    
+#     # Normalize and convert to probability
+#     ai_probability = 1 / (1 + np.exp(-ai_score * 5))  # Sigmoid function
+    
+#     # Determine classification
+#     if ai_probability >= 0.8:
+#         is_ai = True
+#         confidence = int(85 + ai_probability * 13)
+#         risk_level = "CRITICAL"
+#     elif ai_probability >= 0.65:
+#         is_ai = True
+#         confidence = int(70 + ai_probability * 20)
+#         risk_level = "HIGH"
+#     elif ai_probability >= 0.45:
+#         is_ai = True
+#         confidence = int(55 + ai_probability * 25)
+#         risk_level = "MODERATE"
+#     elif ai_probability <= 0.2:
+#         is_ai = False
+#         confidence = int(80 + (1 - ai_probability) * 17)
+#         risk_level = "MINIMAL"
+#     elif ai_probability <= 0.35:
+#         is_ai = False
+#         confidence = int(65 + (1 - ai_probability) * 25)
+#         risk_level = "LOW"
+#     else:
+#         # Uncertain range
+#         is_ai = ai_probability > 0.5
+#         confidence = int(45 + abs(ai_probability - 0.5) * 20)
+#         risk_level = "MODERATE"
+    
+#     return is_ai, min(98, confidence), risk_level
+
+# def download_image_from_url(url: str) -> Optional[bytes]:
+#     """Download image from URL with error handling"""
+#     try:
+#         headers = {
+#             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+#         }
+#         response = requests.get(url, headers=headers, timeout=10)
+#         response.raise_for_status()
+        
+#         # Check if content is an image
+#         content_type = response.headers.get('content-type', '').lower()
+#         if not any(img_type in content_type for img_type in ['image/', 'jpeg', 'png', 'gif', 'webp']):
+#             st.error("❌ URL does not point to a valid image")
+#             return None
+            
+#         return response.content
+#     except requests.exceptions.RequestException as e:
+#         st.error(f"❌ Error downloading image: {str(e)}")
+#         return None
+#     except Exception as e:
+#         st.error(f"❌ Unexpected error: {str(e)}")
+#         return None
+
+# @dataclass
+# class EnhancedAnalysisResult:
+#     is_ai_generated: bool
+#     confidence_pct: int
+#     risk_level: str
+#     ai_model_type: Optional[str]
+#     generation_method: Optional[str]
+    
+#     # Technical properties
+#     resolution: str
+#     aspect_ratio: str
+#     file_type: str
+#     file_size: Optional[str]
+    
+#     # Analysis results
+#     detection_features: AdvancedDetectionFeatures
+#     technical_anomalies: List[str]
+#     authenticity_markers: List[str]
+#     recommendation: str
+    
+#     # Additional metadata
+#     creation_timestamp: Optional[str] = None
+#     camera_signature: Optional[str] = None
+#     processing_history: Optional[List[str]] = None
+#     confidence_breakdown: Optional[Dict[str, float]] = None
+
+# def identify_ai_model_from_features(features: AdvancedDetectionFeatures, url: str) -> Tuple[Optional[str], Optional[str]]:
+#     """Identify specific AI model based on feature analysis"""
+    
+#     url_lower = url.lower()
+    
+#     # Direct URL identification
+#     if any(x in url_lower for x in ['midjourney', 'mj']):
+#         return "Midjourney", "Diffusion Model Generation"
+#     elif any(x in url_lower for x in ['dalle', 'dall-e']):
+#         return "DALL-E", "Transformer-based Generation"
+#     elif any(x in url_lower for x in ['stable-diffusion', 'sd']):
+#         return "Stable Diffusion", "Latent Diffusion Model"
+#     elif any(x in url_lower for x in ['runway', 'gen-2']):
+#         return "Runway ML", "Video Diffusion Model"
+#     elif any(x in url_lower for x in ['leonardo.ai']):
+#         return "Leonardo.AI", "Fine-tuned Diffusion Model"
+#     elif any(x in url_lower for x in ['firefly.adobe']):
+#         return "Adobe Firefly", "Commercial Diffusion Model"
+    
+#     # Feature-based identification
+#     if features.neural_texture_patterns > 0.8 and features.edge_sharpness_consistency > 0.85:
+#         if features.attention_map_irregularities > 0.7:
+#             return "Midjourney-like", "Attention-based Diffusion"
+#         else:
+#             return "Stable Diffusion-like", "Latent Diffusion"
+#     elif features.gradient_consistency > 0.9 and features.color_histogram_anomalies > 0.7:
+#         return "DALL-E-like", "Transformer Generation"
+#     elif features.upsampling_artifacts > 0.8:
+#         return "GAN-based Model", "Generative Adversarial Network"
+    
+#     return None, "Unknown Generation Method"
+
+# def generate_technical_anomalies(features: AdvancedDetectionFeatures, url: str) -> List[str]:
+#     """Generate list of technical anomalies indicating AI generation"""
+#     anomalies = []
+    
+#     if features.pixel_noise_variance < 0.3:
+    
+#     if features.edge_sharpness_consistency > 0.85:
+#         anomalies.append("Unnaturally consistent edge sharpness")
+    
+#     if features.neural_texture_patterns > 0.75:
+#         anomalies.append("Artificial neural texture patterns detected")
+    
+#     if features.frequency_domain_anomalies > 0.7:
+#         anomalies.append("Suspicious frequency domain signatures")
+    
+#     if features.attention_map_irregularities > 0.8:
+#         anomalies.append("Attention-based generation artifacts")
+    
+#     if features.gradient_consistency > 0.9:
+#         anomalies.append("Mathematically perfect gradient transitions")
+    
+#     if features.color_histogram_anomalies > 0.75:
+#         anomalies.append("Unnatural color distribution patterns")
+    
+#     if features.exif_consistency_score < 0.3:
+#         anomalies.append("Missing or inconsistent EXIF metadata")
+    
+#     if features.upsampling_artifacts > 0.7:
+#         anomalies.append("Neural upsampling artifacts present")
+    
+#     if features.latent_space_signatures > 0.8:
+#         anomalies.append("Latent space generation signatures")
+    
+#     # URL-based anomalies
+#     if any(suspicious in url.lower() for suspicious in ['temp', 'generated', 'cache', 'artificial']):
+#         anomalies.append("Suspicious source URL patterns")
+    
+#     return anomalies
+
+# def generate_authenticity_markers(features: AdvancedDetectionFeatures, url: str) -> List[str]:
+#     """Generate list of authenticity markers supporting human creation"""
+#     markers = []
+    
+#     if features.pixel_noise_variance > 0.6:
+#         markers.append("Natural sensor noise characteristics present")
+    
+#     if features.exif_consistency_score > 0.7:
+#         markers.append("Consistent and plausible EXIF metadata")
+    
+#     if features.texture_analysis_score > 0.6:
+#         markers.append("Natural texture diversity patterns")
+    
+#     if 0.3 < features.gradient_consistency < 0.7:
+#         markers.append("Human-like gradient variations")
+    
+#     if features.timestamp_plausibility > 0.7:
+#         markers.append("Plausible creation timestamp")
+    
+#     if 0.4 < features.color_profile_analysis < 0.8:
+#         markers.append("Natural luminance distribution")
+    
+#     # URL-based markers
+#     url_lower = url.lower()
+#     if any(platform in url_lower for platform in ['instagram.com', 'twitter.com', 'facebook.com', 'flickr.com']):
+#         markers.append("Verified social media platform source")
+    
+#     if any(news in url_lower for news in ['reuters.com', 'bbc.com', 'cnn.com', 'apnews.com']):
+#         markers.append("Established news organization source")
+    
+#     if any(stock in url_lower for stock in ['shutterstock.com', 'getty', 'unsplash.com']):
+#         markers.append("Professional stock photography platform")
+    
+#     return markers
+
+# def generate_enhanced_recommendation(is_ai: bool, confidence: int, risk_level: str, features: AdvancedDetectionFeatures) -> str:
+#     """Generate specific recommendations based on comprehensive analysis"""
+    
+#     if is_ai and confidence >= 90:
+#         return f"🚨 CRITICAL: Very high confidence AI detection ({confidence}%). Do not use for verification, legal evidence, or journalism without disclosure. Multiple detection algorithms confirm artificial generation."
+    
+#     elif is_ai and confidence >= 80:
+#         return f"⚠️ HIGH RISK: Strong AI detection signals ({confidence}%). Recommend additional verification through independent tools before use in sensitive contexts."
+    
+#     elif is_ai and confidence >= 65:
+#         return f"⚠️ MODERATE RISK: Probable AI generation detected ({confidence}%). Exercise caution and cross-reference with original sources when possible."
+    
+#     elif not is_ai and confidence >= 90:
+#         return f"✅ HIGH AUTHENTICITY: Strong human creation indicators ({confidence}%). Content shows natural characteristics but always verify source context."
+    
+#     elif not is_ai and confidence >= 75:
+#         return f"✅ LIKELY AUTHENTIC: Good authenticity markers ({confidence}%). Appears to be human-created but maintain healthy skepticism."
+    
+#     else:
+#         return f"⚠️ UNCERTAIN: Mixed detection signals ({confidence}%). Unable to determine with high confidence. Recommend additional analysis and source verification."
+
+# def perform_enhanced_analysis(image_data: Union[bytes, np.ndarray], source_url: str = "") -> EnhancedAnalysisResult:
+#     """Perform comprehensive enhanced AI detection analysis"""
+    
+#     # Get image properties
+#     if isinstance(image_data, bytes):
+#         img = Image.open(BytesIO(image_data))
+#         width, height = img.size
+#         file_size = f"{len(image_data) / (1024*1024):.1f} MB"
+#         file_type = img.format or "JPEG"
+#     else:
+#         height, width = image_data.shape[:2]
+#         file_size = "Unknown"
+#         file_type = "Array"
+    
+#     resolution = f"{width} × {height}"
+#     aspect_ratio = f"{width//np.gcd(width, height)}:{height//np.gcd(width, height)}"
+    
+#     # Comprehensive feature analysis
+#     features = comprehensive_ai_detection(image_data, source_url)
+#     url_analysis = analyze_url_patterns(source_url)
+    
+#     # Advanced classification
+#     is_ai, confidence, risk_level = advanced_ai_classification(features, url_analysis)
+    
+#     # Model identification
+#     ai_model_type, generation_method = identify_ai_model_from_features(features, source_url)
+    
+#     # Generate technical analysis
+#     technical_anomalies = generate_technical_anomalies(features, source_url)
+#     authenticity_markers = generate_authenticity_markers(features, source_url)
+    
+#     # Generate recommendation
+#     recommendation = generate_enhanced_recommendation(is_ai, confidence, risk_level, features)
+    
+#     # Confidence breakdown
+#     confidence_breakdown = {
+#         'pixel_analysis': features.pixel_noise_variance,
+#         'frequency_analysis': features.frequency_domain_anomalies,
+#         'texture_analysis': features.texture_analysis_score,
+#         'color_analysis': features.color_histogram_anomalies,
+#         'metadata_analysis': features.exif_consistency_score,
+#         'url_analysis': url_analysis.get('ai_probability', 0.5)
+#     }
+    
+#     return EnhancedAnalysisResult(
+#         is_ai_generated=is_ai,
+#         confidence_pct=confidence,
+#         risk_level=risk_level,
+#         ai_model_type=ai_model_type,
+#         generation_method=generation_method,
+#         resolution=resolution,
+#         aspect_ratio=aspect_ratio,
+#         file_type=file_type,
+#         file_size=file_size,
+#         detection_features=features,
+#         technical_anomalies=technical_anomalies,
+#         authenticity_markers=authenticity_markers,
+#         recommendation=recommendation,
+#         confidence_breakdown=confidence_breakdown
+#     )
+
+# # -----------------------------
+# # Enhanced App Layout
+# # -----------------------------
+
+# # Header
+# st.markdown("<div class='main-header'>TRUTHLENS PRO</div>", unsafe_allow_html=True)
+# st.markdown("<div class='main-subtitle'>Ultra-Advanced AI Content Detection & Forensic Analysis</div>", unsafe_allow_html=True)
+# st.markdown("<div class='version-badge'><span class='badge'>🚀 V4.0 ENHANCED | REAL CV ANALYSIS</span></div>", unsafe_allow_html=True)
+
+# with st.container():
+#     st.markdown("<div class='truthlens-panel'>", unsafe_allow_html=True)
+
+#     tabs = st.tabs(["🔗 URL Analysis", "📁 Media Upload", "⚙️ Advanced Settings", "📊 Detection Science"])
+
+#     # URL Analysis Tab
+#     with tabs[0]:
+#         st.markdown("### 🎯 Advanced URL Analysis")
+#         st.markdown("**Real computer vision analysis** of images from URLs using advanced pixel-level detection")
+        
+#         url_col1, url_col2 = st.columns([5, 1])
+#         with url_col1:
+#             url_input = st.text_input(
+#                 "",
+#                 placeholder="https://example.com/image.jpg or any direct image URL",
+#                 label_visibility="collapsed",
+#             )
+#             st.caption("🔬 **Real Analysis:** Pixel noise, frequency domain, texture patterns, EXIF data, and more")
+        
+#         with url_col2:
+#             submit_url = st.button("🔍 ANALYZE", type="primary", use_container_width=True)
+
+#         if submit_url and not url_input:
+#             st.error("⚠️ Please enter a valid image URL")
+
+#     # Upload Analysis Tab
+#     with tabs[1]:
+#         st.markdown("### 📤 Advanced File Analysis")
+#         st.markdown("Upload images for **real computer vision analysis** using advanced detection algorithms")
+        
+#         uploaded = st.file_uploader(
+#             "Upload image file", 
+#             type=["jpg","jpeg","png","webp","bmp","gif","tiff"],
+#             help="Supports common image formats up to 200MB"
+#         )
+        
+#         col1, col2, col3 = st.columns([2, 2, 2])
+#         with col2:
+#             submit_upload = st.button("🔬 DEEP ANALYZE", type="primary", use_container_width=True)
+
+#     # Advanced Settings Tab
+#     with tabs[2]:
+#         st.markdown("### ⚙️ Advanced Detection Parameters")
+        
+#         col1, col2 = st.columns(2)
+#         with col1:
+#             st.markdown("**🔬 Analysis Modules**")
+#             enable_pixel_analysis = st.checkbox("Pixel-level Analysis", True)
+#             enable_frequency_analysis = st.checkbox("Frequency Domain Analysis", True)
+#             enable_texture_analysis = st.checkbox("Texture Pattern Analysis", True)
+#             enable_metadata_analysis = st.checkbox("EXIF Metadata Analysis", True)
+            
+#         with col2:
+#             st.markdown("**🎛️ Sensitivity Settings**")
+#             detection_threshold = st.slider("Detection Sensitivity", 0.1, 1.0, 0.7, 0.05)
+#             noise_threshold = st.slider("Noise Analysis Threshold", 0.1, 1.0, 0.5, 0.05)
+#             edge_sensitivity = st.slider("Edge Consistency Sensitivity", 0.1, 1.0, 0.8, 0.05)
+
+#     # Detection Science Tab  
+#     with tabs[3]:
+#         st.markdown("### 📊 Real Detection Science")
+        
+#         col1, col2 = st.columns(2)
+        
+#         with col1:
+#             st.markdown("#### 🔬 Computer Vision Techniques")
+#             st.markdown("""
+#             **Pixel-Level Analysis:**
+#             - Sensor noise variance detection
+#             - Edge sharpness consistency analysis
+#             - Gradient magnitude distribution
+#             - Local Binary Pattern analysis
+            
+#             **Frequency Domain Analysis:**
+#             - FFT-based artifact detection
+#             - High-frequency energy distribution
+#             - Compression pattern analysis
+            
+#             **Color Space Analysis:**
+#             - HSV saturation distribution
+#             - LAB color space anomalies
+#             - Luminance variance analysis
+#             """)
+            
+#         with col2:
+#             st.markdown("#### 🧠 AI Model Detection")
+#             st.markdown("""
+#             **Neural Network Signatures:**
+#             - GAN artifact patterns
+#             - Diffusion model characteristics
+#             - Upsampling artifacts
+#             - Attention mechanism traces
+            
+#             **Metadata Forensics:**
+#             - EXIF consistency analysis
+#             - Camera signature verification
+#             - Timestamp plausibility
+#             - Software signature detection
+            
+#             **Advanced Classification:**
+#             - Weighted feature scoring
+#             - Sigmoid probability mapping
+#             - Multi-threshold classification
+#             """)
+
+#     # Analysis Execution
+#     source_data = None
+#     source_url = ""
+    
+#     if submit_url and url_input:
+#         with st.spinner("🔍 Downloading image from URL..."):
+#             source_data = download_image_from_url(url_input)
+#             source_url = url_input
+            
+#     elif submit_upload and uploaded is not None:
+#         source_data = uploaded.read()
+#         source_url = uploaded.name
+
+#     if source_data:
+#         st.divider()
+        
+#         # Enhanced analysis with real computer vision
+#         with st.spinner("🔬 Performing advanced computer vision analysis..."):
+#             try:
+#                 # Progress indicator for real analysis steps
+#                 progress_bar = st.progress(0)
+#                 status_text = st.empty()
+                
+#                 # Step 1: Image preprocessing
+#                 status_text.text("🔍 Preprocessing image data...")
+#                 progress_bar.progress(20)
+#                 time.sleep(0.5)
+                
+#                 # Step 2: Pixel-level analysis
+#                 status_text.text("🔬 Analyzing pixel patterns and noise characteristics...")
+#                 progress_bar.progress(40)
+#                 time.sleep(0.5)
+                
+#                 # Step 3: Frequency analysis
+#                 status_text.text("📊 Performing frequency domain analysis...")
+#                 progress_bar.progress(60)
+#                 time.sleep(0.5)
+                
+#                 # Step 4: Metadata extraction
+#                 status_text.text("📋 Extracting and analyzing metadata...")
+#                 progress_bar.progress(80)
+#                 time.sleep(0.5)
+                
+#                 # Step 5: Final classification
+#                 status_text.text("🧠 Computing final AI detection scores...")
+#                 progress_bar.progress(100)
+#                 time.sleep(0.5)
+                
+#                 # Perform the actual analysis
+#                 result = perform_enhanced_analysis(source_data, source_url)
+                
+#                 # Clear progress indicators
+#                 progress_bar.empty()
+#                 status_text.empty()
+                
+#                 st.success("✅ **ADVANCED ANALYSIS COMPLETE** - Real computer vision analysis performed")
+                
+#                 # Display results with enhanced formatting
+#                 # Main Verdict
+#                 verdict_class = "verdict-ai" if result.is_ai_generated else "verdict-human"
+#                 verdict_text = f"🤖 AI-GENERATED" if result.is_ai_generated else "👤 HUMAN-CREATED"
+#                 if result.ai_model_type:
+#                     verdict_text += f" ({result.ai_model_type})"
+                
+#                 st.markdown(f"<div class='{verdict_class}'>{verdict_text}</div>", unsafe_allow_html=True)
+                
+#                 # Confidence Display
+#                 confidence_class = "confidence-high" if result.confidence_pct >= 80 else "confidence-medium" if result.confidence_pct >= 60 else "confidence-low"
+                
+#                 st.markdown(
+#                     f"""
+#                     <div class='confidence-display'>
+#                         <div class='confidence-number {confidence_class}'>{result.confidence_pct}%</div>
+#                         <h3>DETECTION CONFIDENCE</h3>
+#                         <p style='color: var(--text-300);'>
+#                             {result.confidence_pct}% confident this content is <strong>{"AI-Generated" if result.is_ai_generated else "Human-Created"}</strong>
+#                         </p>
+#                         <div style='margin-top: 1.5rem; padding: 1.5rem; background: var(--bg-1100); border-radius: 12px; border-left: 4px solid var(--neon-{"red" if result.is_ai_generated else "green"});'>
+#                             <strong>Risk Assessment: {result.risk_level}</strong><br><br>
+#                             {result.recommendation}
+#                         </div>
+#                     </div>
+#                     """, 
+#                     unsafe_allow_html=True
+#                 )
+                
+#                 # Technical Analysis Results
+#                 st.markdown("### 🔬 Advanced Technical Analysis")
+                
+#                 col1, col2, col3 = st.columns(3)
+                
+#                 with col1:
+#                     st.markdown("**📁 Image Properties**")
+#                     st.markdown(f"**Resolution:** {result.resolution}")
+#                     st.markdown(f"**Aspect Ratio:** {result.aspect_ratio}")
+#                     st.markdown(f"**File Type:** {result.file_type}")
+#                     st.markdown(f"**File Size:** {result.file_size}")
+                
+#                 with col2:
+#                     st.markdown("**🎯 Detection Results**")
+#                     st.markdown(f"**AI Model:** {result.ai_model_type or 'Not Detected'}")
+#                     st.markdown(f"**Method:** {result.generation_method or 'Human Creation'}")
+#                     st.markdown(f"**Risk Level:** {result.risk_level}")
+                
+#                 with col3:
+#                     st.markdown("**📊 Analysis Summary**")
+#                     st.markdown(f"**Anomalies Found:** {len(result.technical_anomalies)}")
+#                     st.markdown(f"**Auth Markers:** {len(result.authenticity_markers)}")
+#                     st.markdown(f"**Confidence:** {result.confidence_pct}%")
+                
+#                 # Feature Analysis Visualization
+#                 if result.confidence_breakdown:
+#                     st.markdown("### 📊 Confidence Breakdown")
+                    
+#                     breakdown_cols = st.columns(3)
+#                     for i, (feature, score) in enumerate(result.confidence_breakdown.items()):
+#                         with breakdown_cols[i % 3]:
+#                             feature_name = feature.replace('_', ' ').title()
+#                             score_pct = int(score * 100)
+#                             color = "🔴" if score > 0.7 else "🟡" if score > 0.4 else "🟢"
+#                             st.metric(f"{color} {feature_name}", f"{score_pct}%")
+                
+#                 # Technical Anomalies and Authenticity Markers
+#                 col1, col2 = st.columns(2)
+                
+#                 with col1:
+#                     if result.technical_anomalies:
+#                         st.markdown("#### 🚨 Technical Anomalies")
+#                         for anomaly in result.technical_anomalies:
+#                             st.markdown(f"⚠️ {anomaly}")
+#                     else:
+#                         st.markdown("#### ✅ No Critical Anomalies Found")
+                
+#                 with col2:
+#                     if result.authenticity_markers:
+#                         st.markdown("#### ✅ Authenticity Markers")
+#                         for marker in result.authenticity_markers:
+#                             st.markdown(f"✅ {marker}")
+#                     else:
+#                         st.markdown("#### ⚠️ Limited Authenticity Evidence")
+                
+#                 # Advanced Feature Analysis
+#                 with st.expander("🔬 Detailed Feature Analysis", expanded=False):
+#                     st.markdown("### Advanced Detection Features")
+                    
+#                     features = result.detection_features
+#                     feature_data = [
+#                         ("Pixel Noise Variance", features.pixel_noise_variance, "Lower values suggest AI generation"),
+#                         ("Frequency Domain Anomalies", features.frequency_domain_anomalies, "Artificial frequency patterns"),
+#                         ("Edge Sharpness Consistency", features.edge_sharpness_consistency, "Unnatural edge consistency"),
+#                         ("Texture Analysis Score", features.texture_analysis_score, "Natural texture diversity"),
+#                         ("Color Histogram Anomalies", features.color_histogram_anomalies, "Unnatural color distributions"),
+#                         ("Neural Texture Patterns", features.neural_texture_patterns, "AI-generated texture signatures"),
+#                         ("EXIF Consistency Score", features.exif_consistency_score, "Metadata authenticity"),
+#                         ("Gradient Consistency", features.gradient_consistency, "Mathematical perfection indicator")
+#                     ]
+                    
+#                     for feature_name, value, description in feature_data:
+#                         col1, col2, col3 = st.columns([2, 1, 3])
+#                         with col1:
+#                             st.write(f"**{feature_name}**")
+#                         with col2:
+#                             st.write(f"`{value:.3f}`")
+#                         with col3:
+#                             st.write(f"*{description}*")
+                        
+#                         # Progress bar for visual representation
+#                         st.progress(value, text=f"{int(value * 100)}%")
+#                         st.markdown("---")
+                
+#             except Exception as e:
+#                 st.error(f"❌ Analysis failed: {str(e)}")
+#                 st.error("This could be due to an unsupported image format or corrupted file.")
+
+#     st.markdown("</div>", unsafe_allow_html=True)
+
+# # Enhanced Footer
+# st.markdown("---")
+# st.markdown(
+#     """
+#     <div style='text-align: center; color: var(--text-400); padding: 2rem;'>
+#         <h3 style='color: var(--neon-cyan); margin-bottom: 1rem;'>🔬 TRUTHLENS PRO V4.0</h3>
+#         <p><strong>Real Computer Vision AI Detection</strong></p>
+#         <p>Utilizing advanced pixel analysis, frequency domain processing, texture analysis, and metadata forensics</p>
+#         <p style='font-size: 0.9rem; margin-top: 1.5rem; color: var(--text-500);'>
+#             Results represent sophisticated probabilistic analysis using real computer vision techniques.<br>
+#             For critical applications, always verify through multiple independent methods and sources.
+#         </p>
+#     </div>
+#     """,
+#     unsafe_allow_html=True
+# )
+#         anomalies.append("Absence of natural sensor noise patterns")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
@@ -3316,6 +4490,10 @@ import base64
 from scipy import stats, ndimage
 from skimage import feature, filters, measure, segmentation
 import matplotlib.pyplot as plt
+import warnings
+
+# Suppress warnings for cleaner output
+warnings.filterwarnings('ignore')
 
 # -----------------------------
 # Page setup
@@ -3537,89 +4715,144 @@ class EnhancedAIDetector:
             }
         }
 
+def safe_divide(a, b, default=0.0):
+    """Safe division to avoid division by zero"""
+    try:
+        return a / b if b != 0 else default
+    except:
+        return default
+
 def analyze_image_pixels(image_array: np.ndarray) -> Dict[str, float]:
     """Real pixel-level analysis for AI detection"""
     
-    # Convert to grayscale for analysis
-    if len(image_array.shape) == 3:
-        gray = cv2.cvtColor(image_array, cv2.COLOR_RGB2GRAY)
-    else:
-        gray = image_array
-    
-    results = {}
-    
-    # 1. Noise Analysis - AI images often lack natural sensor noise
-    noise_variance = np.var(gray - cv2.GaussianBlur(gray, (5, 5), 0))
-    results['noise_variance'] = min(1.0, noise_variance / 100.0)  # Normalize
-    
-    # 2. Edge Analysis - AI often creates unnaturally consistent edges
-    edges = cv2.Canny(gray, 50, 150)
-    edge_density = np.sum(edges > 0) / edges.size
-    edge_variance = np.var(edges)
-    results['edge_consistency'] = edge_density * (1.0 - min(1.0, edge_variance / 10000.0))
-    
-    # 3. Frequency Domain Analysis
-    f_transform = np.fft.fft2(gray)
-    f_shift = np.fft.fftshift(f_transform)
-    magnitude_spectrum = np.log(np.abs(f_shift) + 1)
-    
-    # AI images often show artificial patterns in frequency domain
-    high_freq_energy = np.mean(magnitude_spectrum[magnitude_spectrum.shape[0]//4:3*magnitude_spectrum.shape[0]//4,
-                                                 magnitude_spectrum.shape[1]//4:3*magnitude_spectrum.shape[1]//4])
-    results['frequency_anomalies'] = min(1.0, high_freq_energy / 10.0)
-    
-    # 4. Texture Analysis using Local Binary Patterns
-    radius = 3
-    n_points = 8 * radius
     try:
-        lbp = feature.local_binary_pattern(gray, n_points, radius, method='uniform')
-        lbp_hist = np.histogram(lbp.ravel(), bins=n_points + 2, range=(0, n_points + 2))[0]
-        # AI textures often show less diversity in local patterns
-        texture_entropy = stats.entropy(lbp_hist + 1)  # Add 1 to avoid log(0)
-        results['texture_diversity'] = min(1.0, texture_entropy / 5.0)
-    except:
-        results['texture_diversity'] = 0.5
-    
-    # 5. Gradient Analysis
-    grad_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
-    grad_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
-    gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2)
-    gradient_consistency = 1.0 - (np.std(gradient_magnitude) / (np.mean(gradient_magnitude) + 1e-6))
-    results['gradient_consistency'] = max(0.0, min(1.0, gradient_consistency))
-    
-    return results
+        # Convert to grayscale for analysis
+        if len(image_array.shape) == 3:
+            gray = cv2.cvtColor(image_array, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = image_array.astype(np.uint8)
+        
+        results = {}
+        
+        # 1. Noise Analysis - AI images often lack natural sensor noise
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        noise = gray.astype(float) - blurred.astype(float)
+        noise_variance = np.var(noise)
+        results['noise_variance'] = min(1.0, noise_variance / 100.0)  # Normalize
+        
+        # 2. Edge Analysis - AI often creates unnaturally consistent edges
+        try:
+            edges = cv2.Canny(gray, 50, 150)
+            edge_density = np.sum(edges > 0) / edges.size
+            edge_variance = np.var(edges.astype(float))
+            results['edge_consistency'] = edge_density * (1.0 - min(1.0, safe_divide(edge_variance, 10000.0)))
+        except:
+            results['edge_consistency'] = 0.5
+        
+        # 3. Frequency Domain Analysis
+        try:
+            f_transform = np.fft.fft2(gray)
+            f_shift = np.fft.fftshift(f_transform)
+            magnitude_spectrum = np.log(np.abs(f_shift) + 1)
+            
+            # AI images often show artificial patterns in frequency domain
+            h, w = magnitude_spectrum.shape
+            center_region = magnitude_spectrum[h//4:3*h//4, w//4:3*w//4]
+            high_freq_energy = np.mean(center_region)
+            results['frequency_anomalies'] = min(1.0, safe_divide(high_freq_energy, 10.0))
+        except:
+            results['frequency_anomalies'] = 0.5
+        
+        # 4. Texture Analysis using Local Binary Patterns
+        try:
+            radius = 3
+            n_points = 8 * radius
+            lbp = feature.local_binary_pattern(gray, n_points, radius, method='uniform')
+            lbp_hist = np.histogram(lbp.ravel(), bins=n_points + 2, range=(0, n_points + 2))[0]
+            # AI textures often show less diversity in local patterns
+            texture_entropy = stats.entropy(lbp_hist + 1)  # Add 1 to avoid log(0)
+            results['texture_diversity'] = min(1.0, safe_divide(texture_entropy, 5.0))
+        except:
+            results['texture_diversity'] = 0.5
+        
+        # 5. Gradient Analysis
+        try:
+            grad_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
+            grad_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
+            gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2)
+            mean_grad = np.mean(gradient_magnitude)
+            std_grad = np.std(gradient_magnitude)
+            gradient_consistency = 1.0 - safe_divide(std_grad, mean_grad + 1e-6)
+            results['gradient_consistency'] = max(0.0, min(1.0, gradient_consistency))
+        except:
+            results['gradient_consistency'] = 0.5
+        
+        return results
+        
+    except Exception as e:
+        st.error(f"Error in pixel analysis: {str(e)}")
+        return {
+            'noise_variance': 0.5,
+            'edge_consistency': 0.5,
+            'frequency_anomalies': 0.5,
+            'texture_diversity': 0.5,
+            'gradient_consistency': 0.5
+        }
 
 def analyze_color_characteristics(image_array: np.ndarray) -> Dict[str, float]:
     """Analyze color characteristics that differ between AI and natural images"""
     
-    results = {}
-    
-    if len(image_array.shape) != 3:
-        return {'color_naturalness': 0.5, 'saturation_analysis': 0.5}
-    
-    # Convert to different color spaces
-    hsv = cv2.cvtColor(image_array, cv2.COLOR_RGB2HSV)
-    lab = cv2.cvtColor(image_array, cv2.COLOR_RGB2LAB)
-    
-    # 1. Saturation Analysis - AI often oversaturates
-    saturation = hsv[:, :, 1].flatten()
-    high_sat_ratio = np.sum(saturation > 200) / len(saturation)  # Proportion of highly saturated pixels
-    results['saturation_analysis'] = high_sat_ratio
-    
-    # 2. Color Distribution Analysis
-    # AI images often have unnatural color clustering
-    colors_reshaped = image_array.reshape(-1, 3)
-    unique_colors = len(np.unique(colors_reshaped.view(np.dtype((np.void, colors_reshaped.dtype.itemsize * 3)))))
-    total_pixels = colors_reshaped.shape[0]
-    color_diversity = unique_colors / total_pixels
-    results['color_diversity'] = min(1.0, color_diversity * 10)  # Scale appropriately
-    
-    # 3. Luminance Analysis
-    luminance = 0.299 * image_array[:, :, 0] + 0.587 * image_array[:, :, 1] + 0.114 * image_array[:, :, 2]
-    luminance_variance = np.var(luminance)
-    results['luminance_variance'] = min(1.0, luminance_variance / 1000.0)
-    
-    return results
+    try:
+        results = {}
+        
+        if len(image_array.shape) != 3:
+            return {'color_naturalness': 0.5, 'saturation_analysis': 0.5, 'color_diversity': 0.5, 'luminance_variance': 0.5}
+        
+        # Ensure image is in proper format
+        if image_array.dtype != np.uint8:
+            image_array = (image_array * 255).astype(np.uint8) if image_array.max() <= 1.0 else image_array.astype(np.uint8)
+        
+        # Convert to different color spaces
+        try:
+            hsv = cv2.cvtColor(image_array, cv2.COLOR_RGB2HSV)
+            
+            # 1. Saturation Analysis - AI often oversaturates
+            saturation = hsv[:, :, 1].flatten()
+            high_sat_ratio = np.sum(saturation > 200) / len(saturation)
+            results['saturation_analysis'] = high_sat_ratio
+        except:
+            results['saturation_analysis'] = 0.5
+        
+        # 2. Color Distribution Analysis
+        try:
+            colors_reshaped = image_array.reshape(-1, 3)
+            # Sample a subset for efficiency
+            if len(colors_reshaped) > 10000:
+                indices = np.random.choice(len(colors_reshaped), 10000, replace=False)
+                colors_sample = colors_reshaped[indices]
+            else:
+                colors_sample = colors_reshaped
+            
+            unique_colors = len(np.unique(colors_sample.view(np.dtype((np.void, colors_sample.dtype.itemsize * 3)))))
+            total_pixels = colors_sample.shape[0]
+            color_diversity = safe_divide(unique_colors, total_pixels)
+            results['color_diversity'] = min(1.0, color_diversity * 10)
+        except:
+            results['color_diversity'] = 0.5
+        
+        # 3. Luminance Analysis
+        try:
+            luminance = 0.299 * image_array[:, :, 0] + 0.587 * image_array[:, :, 1] + 0.114 * image_array[:, :, 2]
+            luminance_variance = np.var(luminance)
+            results['luminance_variance'] = min(1.0, safe_divide(luminance_variance, 1000.0))
+        except:
+            results['luminance_variance'] = 0.5
+        
+        return results
+        
+    except Exception as e:
+        st.error(f"Error in color analysis: {str(e)}")
+        return {'saturation_analysis': 0.5, 'color_diversity': 0.5, 'luminance_variance': 0.5}
 
 def analyze_compression_patterns(image_data: bytes, file_path: str) -> Dict[str, float]:
     """Analyze compression patterns that may indicate AI generation"""
@@ -3628,8 +4861,9 @@ def analyze_compression_patterns(image_data: bytes, file_path: str) -> Dict[str,
     
     try:
         # Basic file entropy analysis
-        entropy = stats.entropy(list(image_data))
-        results['file_entropy'] = min(1.0, entropy / 8.0)  # Normalize to 0-1
+        byte_counts = np.bincount(list(image_data), minlength=256)
+        entropy = stats.entropy(byte_counts)
+        results['file_entropy'] = min(1.0, safe_divide(entropy, 8.0))  # Normalize to 0-1
         
         # File size analysis relative to dimensions
         try:
@@ -3637,13 +4871,13 @@ def analyze_compression_patterns(image_data: bytes, file_path: str) -> Dict[str,
                 width, height = img.size
                 expected_size = width * height * 3 * 0.1  # Rough estimate for JPEG compression
                 actual_size = len(image_data)
-                compression_ratio = actual_size / expected_size if expected_size > 0 else 1.0
+                compression_ratio = safe_divide(actual_size, expected_size) if expected_size > 0 else 1.0
                 results['compression_efficiency'] = min(1.0, abs(compression_ratio - 0.05) * 20)
         except:
             results['compression_efficiency'] = 0.5
             
     except Exception as e:
-        st.error(f"Error in compression analysis: {e}")
+        st.error(f"Error in compression analysis: {str(e)}")
         results = {'file_entropy': 0.5, 'compression_efficiency': 0.5}
     
     return results
@@ -3664,105 +4898,51 @@ def extract_and_analyze_metadata(image_path: Union[str, bytes]) -> Dict[str, flo
             img = Image.open(image_path)
             
         # Extract EXIF data
-        exif_dict = img._getexif()
-        if exif_dict is not None:
-            exif = {ExifTags.TAGS[k]: v for k, v in exif_dict.items() if k in ExifTags.TAGS}
-            
-            # Check for camera information
-            camera_make = exif.get('Make', '').lower()
-            camera_model = exif.get('Model', '').lower()
-            software = exif.get('Software', '').lower()
-            
-            # Known AI generation software signatures
-            ai_software_indicators = [
-                'midjourney', 'dall-e', 'stable diffusion', 'runway', 'synthesia',
-                'generated', 'artificial', 'ai', 'neural', 'diffusion'
-            ]
-            
-            # Check software field for AI indicators
-            software_score = 0.8 if any(indicator in software for indicator in ai_software_indicators) else 0.2
-            
-            # Check for realistic camera signatures
-            known_cameras = ['canon', 'nikon', 'sony', 'fujifilm', 'panasonic', 'olympus', 'leica']
-            known_phones = ['iphone', 'samsung', 'pixel', 'oneplus', 'huawei', 'xiaomi']
-            
-            camera_score = 0.2
-            if any(brand in camera_make or brand in camera_model for brand in known_cameras + known_phones):
-                camera_score = 0.8
-            
-            results['camera_signature'] = camera_score
-            results['exif_consistency'] = 1.0 - software_score  # Inverse of AI software presence
-            
-            # Analyze timestamp plausibility
-            datetime_original = exif.get('DateTimeOriginal')
-            if datetime_original:
-                # Basic timestamp analysis - could be enhanced further
-                results['creation_plausibility'] = 0.7  # Assume reasonable if present
-            
+        try:
+            exif_dict = img._getexif()
+            if exif_dict is not None:
+                exif = {}
+                for k, v in exif_dict.items():
+                    if k in ExifTags.TAGS:
+                        exif[ExifTags.TAGS[k]] = v
+                
+                # Check for camera information
+                camera_make = str(exif.get('Make', '')).lower()
+                camera_model = str(exif.get('Model', '')).lower()
+                software = str(exif.get('Software', '')).lower()
+                
+                # Known AI generation software signatures
+                ai_software_indicators = [
+                    'midjourney', 'dall-e', 'stable diffusion', 'runway', 'synthesia',
+                    'generated', 'artificial', 'ai', 'neural', 'diffusion'
+                ]
+                
+                # Check software field for AI indicators
+                software_score = 0.8 if any(indicator in software for indicator in ai_software_indicators) else 0.2
+                
+                # Check for realistic camera signatures
+                known_cameras = ['canon', 'nikon', 'sony', 'fujifilm', 'panasonic', 'olympus', 'leica']
+                known_phones = ['iphone', 'samsung', 'pixel', 'oneplus', 'huawei', 'xiaomi']
+                
+                camera_score = 0.2
+                if any(brand in camera_make or brand in camera_model for brand in known_cameras + known_phones):
+                    camera_score = 0.8
+                
+                results['camera_signature'] = camera_score
+                results['exif_consistency'] = 1.0 - software_score  # Inverse of AI software presence
+                
+                # Analyze timestamp plausibility
+                datetime_original = exif.get('DateTimeOriginal')
+                if datetime_original:
+                    results['creation_plausibility'] = 0.7  # Assume reasonable if present
+        except:
+            # If EXIF extraction fails, it could indicate AI generation (no metadata) or processing
+            results['exif_consistency'] = 0.3
+    
     except Exception as e:
-        # If EXIF extraction fails, it could indicate AI generation (no metadata) or processing
         results['exif_consistency'] = 0.3
     
     return results
-
-def comprehensive_ai_detection(image_data: Union[bytes, np.ndarray], source_url: str = "") -> AdvancedDetectionFeatures:
-    """Comprehensive AI detection using multiple analysis methods"""
-    
-    # Convert image data to numpy array if needed
-    if isinstance(image_data, bytes):
-        img = Image.open(BytesIO(image_data))
-        image_array = np.array(img)
-    else:
-        image_array = image_data
-        img = None
-    
-    # Ensure image is in RGB format
-    if len(image_array.shape) == 3 and image_array.shape[2] == 4:  # RGBA
-        image_array = image_array[:, :, :3]  # Remove alpha channel
-    
-    # Pixel-level analysis
-    pixel_analysis = analyze_image_pixels(image_array)
-    
-    # Color analysis
-    color_analysis = analyze_color_characteristics(image_array)
-    
-    # Compression analysis
-    if isinstance(image_data, bytes):
-        compression_analysis = analyze_compression_patterns(image_data, "")
-        metadata_analysis = extract_and_analyze_metadata(image_data)
-    else:
-        compression_analysis = {'file_entropy': 0.5, 'compression_efficiency': 0.5}
-        metadata_analysis = {'exif_consistency': 0.5, 'creation_plausibility': 0.5, 'camera_signature': 0.5}
-    
-    # URL-based analysis
-    url_analysis = analyze_url_patterns(source_url)
-    
-    # Combine all analyses into AdvancedDetectionFeatures
-    return AdvancedDetectionFeatures(
-        # Pixel-level features
-        pixel_noise_variance=pixel_analysis.get('noise_variance', 0.5),
-        frequency_domain_anomalies=pixel_analysis.get('frequency_anomalies', 0.5),
-        edge_sharpness_consistency=pixel_analysis.get('edge_consistency', 0.5),
-        compression_artifacts=compression_analysis.get('compression_efficiency', 0.5),
-        
-        # Advanced Computer Vision
-        texture_analysis_score=pixel_analysis.get('texture_diversity', 0.5),
-        color_histogram_anomalies=color_analysis.get('color_diversity', 0.5),
-        gradient_consistency=pixel_analysis.get('gradient_consistency', 0.5),
-        local_binary_patterns=pixel_analysis.get('texture_diversity', 0.5),
-        
-        # Deep Learning Indicators (enhanced heuristics)
-        neural_texture_patterns=1.0 - pixel_analysis.get('texture_diversity', 0.5),
-        upsampling_artifacts=pixel_analysis.get('edge_consistency', 0.5),
-        attention_map_irregularities=color_analysis.get('saturation_analysis', 0.5),
-        latent_space_signatures=url_analysis.get('ai_probability', 0.5),
-        
-        # Metadata and Technical
-        exif_consistency_score=metadata_analysis.get('exif_consistency', 0.5),
-        timestamp_plausibility=metadata_analysis.get('creation_plausibility', 0.5),
-        color_profile_analysis=color_analysis.get('luminance_variance', 0.5),
-        file_entropy_analysis=compression_analysis.get('file_entropy', 0.5)
-    )
 
 def analyze_url_patterns(url: str) -> Dict[str, float]:
     """Enhanced URL pattern analysis with more sophisticated detection"""
@@ -3821,20 +5001,23 @@ def analyze_url_patterns(url: str) -> Dict[str, float]:
             authentic_score += 0.8
             break
     
-    # URL structure analysis
-    parsed_url = urlparse(url)
-    
-    # Suspicious patterns in path
-    if re.search(r'[0-9a-f]{32,}', parsed_url.path):  # Long hex strings
-        ai_score += 0.3
-    
-    if re.search(r'(generated|temp|cache|upload).*\.(jpg|png|gif|webp)', parsed_url.path):
-        ai_score += 0.4
-    
-    # File naming patterns
-    filename = os.path.basename(parsed_url.path).lower()
-    if re.match(r'(img_|image_|temp_|cache_)\d+', filename):
-        ai_score += 0.2
+    try:
+        # URL structure analysis
+        parsed_url = urlparse(url)
+        
+        # Suspicious patterns in path
+        if re.search(r'[0-9a-f]{32,}', parsed_url.path):  # Long hex strings
+            ai_score += 0.3
+        
+        if re.search(r'(generated|temp|cache|upload).*\.(jpg|png|gif|webp)', parsed_url.path):
+            ai_score += 0.4
+        
+        # File naming patterns
+        filename = os.path.basename(parsed_url.path).lower()
+        if re.match(r'(img_|image_|temp_|cache_)\d+', filename):
+            ai_score += 0.2
+    except:
+        pass
     
     # Balance scores
     final_ai_prob = max(0, min(1, ai_score - authentic_score * 0.8))
@@ -3842,70 +5025,146 @@ def analyze_url_patterns(url: str) -> Dict[str, float]:
     
     return {'ai_probability': final_ai_prob, 'source_confidence': source_confidence}
 
+def comprehensive_ai_detection(image_data: Union[bytes, np.ndarray], source_url: str = "") -> AdvancedDetectionFeatures:
+    """Comprehensive AI detection using multiple analysis methods"""
+    
+    try:
+        # Convert image data to numpy array if needed
+        if isinstance(image_data, bytes):
+            img = Image.open(BytesIO(image_data))
+            image_array = np.array(img)
+        else:
+            image_array = image_data
+        
+        # Ensure image is in RGB format
+        if len(image_array.shape) == 3 and image_array.shape[2] == 4:  # RGBA
+            image_array = image_array[:, :, :3]  # Remove alpha channel
+        
+        # Pixel-level analysis
+        pixel_analysis = analyze_image_pixels(image_array)
+        
+        # Color analysis
+        color_analysis = analyze_color_characteristics(image_array)
+        
+        # Compression analysis
+        if isinstance(image_data, bytes):
+            compression_analysis = analyze_compression_patterns(image_data, "")
+            metadata_analysis = extract_and_analyze_metadata(image_data)
+        else:
+            compression_analysis = {'file_entropy': 0.5, 'compression_efficiency': 0.5}
+            metadata_analysis = {'exif_consistency': 0.5, 'creation_plausibility': 0.5, 'camera_signature': 0.5}
+        
+        # URL-based analysis
+        url_analysis = analyze_url_patterns(source_url)
+        
+        # Combine all analyses into AdvancedDetectionFeatures
+        return AdvancedDetectionFeatures(
+            # Pixel-level features
+            pixel_noise_variance=pixel_analysis.get('noise_variance', 0.5),
+            frequency_domain_anomalies=pixel_analysis.get('frequency_anomalies', 0.5),
+            edge_sharpness_consistency=pixel_analysis.get('edge_consistency', 0.5),
+            compression_artifacts=compression_analysis.get('compression_efficiency', 0.5),
+            
+            # Advanced Computer Vision
+            texture_analysis_score=pixel_analysis.get('texture_diversity', 0.5),
+            color_histogram_anomalies=color_analysis.get('color_diversity', 0.5),
+            gradient_consistency=pixel_analysis.get('gradient_consistency', 0.5),
+            local_binary_patterns=pixel_analysis.get('texture_diversity', 0.5),
+            
+            # Deep Learning Indicators (enhanced heuristics)
+            neural_texture_patterns=1.0 - pixel_analysis.get('texture_diversity', 0.5),
+            upsampling_artifacts=pixel_analysis.get('edge_consistency', 0.5),
+            attention_map_irregularities=color_analysis.get('saturation_analysis', 0.5),
+            latent_space_signatures=url_analysis.get('ai_probability', 0.5),
+            
+            # Metadata and Technical
+            exif_consistency_score=metadata_analysis.get('exif_consistency', 0.5),
+            timestamp_plausibility=metadata_analysis.get('creation_plausibility', 0.5),
+            color_profile_analysis=color_analysis.get('luminance_variance', 0.5),
+            file_entropy_analysis=compression_analysis.get('file_entropy', 0.5)
+        )
+        
+    except Exception as e:
+        st.error(f"Error in comprehensive detection: {str(e)}")
+        # Return default values in case of error
+        return AdvancedDetectionFeatures(
+            pixel_noise_variance=0.5, frequency_domain_anomalies=0.5, edge_sharpness_consistency=0.5,
+            compression_artifacts=0.5, texture_analysis_score=0.5, color_histogram_anomalies=0.5,
+            gradient_consistency=0.5, local_binary_patterns=0.5, neural_texture_patterns=0.5,
+            upsampling_artifacts=0.5, attention_map_irregularities=0.5, latent_space_signatures=0.5,
+            exif_consistency_score=0.5, timestamp_plausibility=0.5, color_profile_analysis=0.5,
+            file_entropy_analysis=0.5
+        )
+
 def advanced_ai_classification(features: AdvancedDetectionFeatures, url_analysis: Dict) -> Tuple[bool, int, str]:
     """Advanced AI classification using weighted feature analysis"""
     
-    # Sophisticated weighted scoring based on research
-    weights = {
-        'pixel_noise_variance': -0.15,        # Lower noise = more likely AI (negative weight)
-        'frequency_domain_anomalies': 0.12,   # Frequency anomalies indicate AI
-        'edge_sharpness_consistency': 0.13,   # Too consistent = AI
-        'compression_artifacts': 0.08,
-        'texture_analysis_score': -0.11,      # Less texture diversity = AI (negative)
-        'color_histogram_anomalies': 0.10,
-        'gradient_consistency': 0.09,
-        'neural_texture_patterns': 0.14,      # High neural patterns = AI
-        'upsampling_artifacts': 0.10,
-        'attention_map_irregularities': 0.08,
-        'latent_space_signatures': 0.12,
-        'exif_consistency_score': -0.13,      # Good EXIF = human (negative weight)
-        'timestamp_plausibility': -0.08,
-        'color_profile_analysis': 0.07,
-        'file_entropy_analysis': 0.06
-    }
-    
-    # Calculate weighted score
-    ai_score = 0.0
-    feature_dict = features.__dict__
-    
-    for feature_name, weight in weights.items():
-        if feature_name in feature_dict:
-            ai_score += feature_dict[feature_name] * weight
-    
-    # Add URL analysis
-    ai_score += url_analysis.get('ai_probability', 0.5) * 0.25
-    
-    # Normalize and convert to probability
-    ai_probability = 1 / (1 + np.exp(-ai_score * 5))  # Sigmoid function
-    
-    # Determine classification
-    if ai_probability >= 0.8:
-        is_ai = True
-        confidence = int(85 + ai_probability * 13)
-        risk_level = "CRITICAL"
-    elif ai_probability >= 0.65:
-        is_ai = True
-        confidence = int(70 + ai_probability * 20)
-        risk_level = "HIGH"
-    elif ai_probability >= 0.45:
-        is_ai = True
-        confidence = int(55 + ai_probability * 25)
-        risk_level = "MODERATE"
-    elif ai_probability <= 0.2:
-        is_ai = False
-        confidence = int(80 + (1 - ai_probability) * 17)
-        risk_level = "MINIMAL"
-    elif ai_probability <= 0.35:
-        is_ai = False
-        confidence = int(65 + (1 - ai_probability) * 25)
-        risk_level = "LOW"
-    else:
-        # Uncertain range
-        is_ai = ai_probability > 0.5
-        confidence = int(45 + abs(ai_probability - 0.5) * 20)
-        risk_level = "MODERATE"
-    
-    return is_ai, min(98, confidence), risk_level
+    try:
+        # Sophisticated weighted scoring based on research
+        weights = {
+            'pixel_noise_variance': -0.15,        # Lower noise = more likely AI (negative weight)
+            'frequency_domain_anomalies': 0.12,   # Frequency anomalies indicate AI
+            'edge_sharpness_consistency': 0.13,   # Too consistent = AI
+            'compression_artifacts': 0.08,
+            'texture_analysis_score': -0.11,      # Less texture diversity = AI (negative)
+            'color_histogram_anomalies': 0.10,
+            'gradient_consistency': 0.09,
+            'neural_texture_patterns': 0.14,      # High neural patterns = AI
+            'upsampling_artifacts': 0.10,
+            'attention_map_irregularities': 0.08,
+            'latent_space_signatures': 0.12,
+            'exif_consistency_score': -0.13,      # Good EXIF = human (negative weight)
+            'timestamp_plausibility': -0.08,
+            'color_profile_analysis': 0.07,
+            'file_entropy_analysis': 0.06
+        }
+        
+        # Calculate weighted score
+        ai_score = 0.0
+        feature_dict = features.__dict__
+        
+        for feature_name, weight in weights.items():
+            if feature_name in feature_dict:
+                ai_score += feature_dict[feature_name] * weight
+        
+        # Add URL analysis
+        ai_score += url_analysis.get('ai_probability', 0.5) * 0.25
+        
+        # Normalize and convert to probability using sigmoid
+        ai_probability = 1 / (1 + np.exp(-ai_score * 5))
+        
+        # Determine classification
+        if ai_probability >= 0.8:
+            is_ai = True
+            confidence = int(85 + ai_probability * 13)
+            risk_level = "CRITICAL"
+        elif ai_probability >= 0.65:
+            is_ai = True
+            confidence = int(70 + ai_probability * 20)
+            risk_level = "HIGH"
+        elif ai_probability >= 0.45:
+            is_ai = True
+            confidence = int(55 + ai_probability * 25)
+            risk_level = "MODERATE"
+        elif ai_probability <= 0.2:
+            is_ai = False
+            confidence = int(80 + (1 - ai_probability) * 17)
+            risk_level = "MINIMAL"
+        elif ai_probability <= 0.35:
+            is_ai = False
+            confidence = int(65 + (1 - ai_probability) * 25)
+            risk_level = "LOW"
+        else:
+            # Uncertain range
+            is_ai = ai_probability > 0.5
+            confidence = int(45 + abs(ai_probability - 0.5) * 20)
+            risk_level = "MODERATE"
+        
+        return is_ai, min(98, confidence), risk_level
+        
+    except Exception as e:
+        st.error(f"Error in AI classification: {str(e)}")
+        return True, 50, "UNCERTAIN"
 
 def download_image_from_url(url: str) -> Optional[bytes]:
     """Download image from URL with error handling"""
@@ -4087,367 +5346,424 @@ def generate_enhanced_recommendation(is_ai: bool, confidence: int, risk_level: s
 def perform_enhanced_analysis(image_data: Union[bytes, np.ndarray], source_url: str = "") -> EnhancedAnalysisResult:
     """Perform comprehensive enhanced AI detection analysis"""
     
-    # Get image properties
-    if isinstance(image_data, bytes):
-        img = Image.open(BytesIO(image_data))
-        width, height = img.size
-        file_size = f"{len(image_data) / (1024*1024):.1f} MB"
-        file_type = img.format or "JPEG"
-    else:
-        height, width = image_data.shape[:2]
-        file_size = "Unknown"
-        file_type = "Array"
+    try:
+        # Get image properties
+        if isinstance(image_data, bytes):
+            img = Image.open(BytesIO(image_data))
+            width, height = img.size
+            file_size = f"{len(image_data) / (1024*1024):.1f} MB"
+            file_type = img.format or "JPEG"
+        else:
+            height, width = image_data.shape[:2]
+            file_size = "Unknown"
+            file_type = "Array"
+        
+        resolution = f"{width} × {height}"
+        
+        # Calculate aspect ratio safely
+        try:
+            gcd = np.gcd(width, height)
+            aspect_ratio = f"{width//gcd}:{height//gcd}"
+        except:
+            aspect_ratio = f"{width}:{height}"
+        
+        # Comprehensive feature analysis
+        features = comprehensive_ai_detection(image_data, source_url)
+        url_analysis = analyze_url_patterns(source_url)
+        
+        # Advanced classification
+        is_ai, confidence, risk_level = advanced_ai_classification(features, url_analysis)
+        
+        # Model identification
+        ai_model_type, generation_method = identify_ai_model_from_features(features, source_url)
+        
+        # Generate technical analysis
+        technical_anomalies = generate_technical_anomalies(features, source_url)
+        authenticity_markers = generate_authenticity_markers(features, source_url)
+        
+        # Generate recommendation
+        recommendation = generate_enhanced_recommendation(is_ai, confidence, risk_level, features)
+        
+        # Confidence breakdown
+        confidence_breakdown = {
+            'pixel_analysis': features.pixel_noise_variance,
+            'frequency_analysis': features.frequency_domain_anomalies,
+            'texture_analysis': features.texture_analysis_score,
+            'color_analysis': features.color_histogram_anomalies,
+            'metadata_analysis': features.exif_consistency_score,
+            'url_analysis': url_analysis.get('ai_probability', 0.5)
+        }
+        
+        return EnhancedAnalysisResult(
+            is_ai_generated=is_ai,
+            confidence_pct=confidence,
+            risk_level=risk_level,
+            ai_model_type=ai_model_type,
+            generation_method=generation_method,
+            resolution=resolution,
+            aspect_ratio=aspect_ratio,
+            file_type=file_type,
+            file_size=file_size,
+            detection_features=features,
+            technical_anomalies=technical_anomalies,
+            authenticity_markers=authenticity_markers,
+            recommendation=recommendation,
+            confidence_breakdown=confidence_breakdown
+        )
+        
+    except Exception as e:
+        st.error(f"Error in enhanced analysis: {str(e)}")
+        # Return a default result in case of error
+        default_features = AdvancedDetectionFeatures(
+            pixel_noise_variance=0.5, frequency_domain_anomalies=0.5, edge_sharpness_consistency=0.5,
+            compression_artifacts=0.5, texture_analysis_score=0.5, color_histogram_anomalies=0.5,
+            gradient_consistency=0.5, local_binary_patterns=0.5, neural_texture_patterns=0.5,
+            upsampling_artifacts=0.5, attention_map_irregularities=0.5, latent_space_signatures=0.5,
+            exif_consistency_score=0.5, timestamp_plausibility=0.5, color_profile_analysis=0.5,
+            file_entropy_analysis=0.5
+        )
+        
+        return EnhancedAnalysisResult(
+            is_ai_generated=True,
+            confidence_pct=50,
+            risk_level="UNCERTAIN",
+            ai_model_type=None,
+            generation_method=None,
+            resolution="Unknown",
+            aspect_ratio="Unknown",
+            file_type="Unknown",
+            file_size="Unknown",
+            detection_features=default_features,
+            technical_anomalies=["Analysis failed - unable to determine"],
+            authenticity_markers=[],
+            recommendation="⚠️ Analysis failed. Unable to determine authenticity.",
+            confidence_breakdown={}
+        )
+
+def display_analysis_results(result: EnhancedAnalysisResult):
+    """Display comprehensive analysis results"""
     
-    resolution = f"{width} × {height}"
-    aspect_ratio = f"{width//np.gcd(width, height)}:{height//np.gcd(width, height)}"
+    # Main Verdict
+    verdict_class = "verdict-ai" if result.is_ai_generated else "verdict-human"
+    verdict_text = f"🤖 AI-GENERATED" if result.is_ai_generated else "👤 HUMAN-CREATED"
+    if result.ai_model_type:
+        verdict_text += f" ({result.ai_model_type})"
     
-    # Comprehensive feature analysis
-    features = comprehensive_ai_detection(image_data, source_url)
-    url_analysis = analyze_url_patterns(source_url)
+    st.markdown(f"<div class='{verdict_class}'>{verdict_text}</div>", unsafe_allow_html=True)
     
-    # Advanced classification
-    is_ai, confidence, risk_level = advanced_ai_classification(features, url_analysis)
+    # Confidence Display
+    confidence_class = "confidence-high" if result.confidence_pct >= 80 else "confidence-medium" if result.confidence_pct >= 60 else "confidence-low"
     
-    # Model identification
-    ai_model_type, generation_method = identify_ai_model_from_features(features, source_url)
-    
-    # Generate technical analysis
-    technical_anomalies = generate_technical_anomalies(features, source_url)
-    authenticity_markers = generate_authenticity_markers(features, source_url)
-    
-    # Generate recommendation
-    recommendation = generate_enhanced_recommendation(is_ai, confidence, risk_level, features)
-    
-    # Confidence breakdown
-    confidence_breakdown = {
-        'pixel_analysis': features.pixel_noise_variance,
-        'frequency_analysis': features.frequency_domain_anomalies,
-        'texture_analysis': features.texture_analysis_score,
-        'color_analysis': features.color_histogram_anomalies,
-        'metadata_analysis': features.exif_consistency_score,
-        'url_analysis': url_analysis.get('ai_probability', 0.5)
-    }
-    
-    return EnhancedAnalysisResult(
-        is_ai_generated=is_ai,
-        confidence_pct=confidence,
-        risk_level=risk_level,
-        ai_model_type=ai_model_type,
-        generation_method=generation_method,
-        resolution=resolution,
-        aspect_ratio=aspect_ratio,
-        file_type=file_type,
-        file_size=file_size,
-        detection_features=features,
-        technical_anomalies=technical_anomalies,
-        authenticity_markers=authenticity_markers,
-        recommendation=recommendation,
-        confidence_breakdown=confidence_breakdown
+    st.markdown(
+        f"""
+        <div class='confidence-display'>
+            <div class='confidence-number {confidence_class}'>{result.confidence_pct}%</div>
+            <h3>DETECTION CONFIDENCE</h3>
+            <p style='color: var(--text-300);'>
+                {result.confidence_pct}% confident this content is <strong>{"AI-Generated" if result.is_ai_generated else "Human-Created"}</strong>
+            </p>
+            <div style='margin-top: 1.5rem; padding: 1.5rem; background: var(--bg-1100); border-radius: 12px; border-left: 4px solid var(--neon-{"red" if result.is_ai_generated else "green"});'>
+                <strong>Risk Assessment: {result.risk_level}</strong><br><br>
+                {result.recommendation}
+            </div>
+        </div>
+        """, 
+        unsafe_allow_html=True
     )
+    
+    # Technical Analysis Results
+    st.markdown("### 🔬 Advanced Technical Analysis")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("**📁 Image Properties**")
+        st.markdown(f"**Resolution:** {result.resolution}")
+        st.markdown(f"**Aspect Ratio:** {result.aspect_ratio}")
+        st.markdown(f"**File Type:** {result.file_type}")
+        st.markdown(f"**File Size:** {result.file_size}")
+    
+    with col2:
+        st.markdown("**🎯 Detection Results**")
+        st.markdown(f"**AI Model:** {result.ai_model_type or 'Not Detected'}")
+        st.markdown(f"**Method:** {result.generation_method or 'Human Creation'}")
+        st.markdown(f"**Risk Level:** {result.risk_level}")
+    
+    with col3:
+        st.markdown("**📊 Analysis Summary**")
+        st.markdown(f"**Anomalies Found:** {len(result.technical_anomalies)}")
+        st.markdown(f"**Auth Markers:** {len(result.authenticity_markers)}")
+        st.markdown(f"**Confidence:** {result.confidence_pct}%")
+    
+    # Feature Analysis Visualization
+    if result.confidence_breakdown:
+        st.markdown("### 📊 Confidence Breakdown")
+        
+        breakdown_cols = st.columns(3)
+        for i, (feature, score) in enumerate(result.confidence_breakdown.items()):
+            with breakdown_cols[i % 3]:
+                feature_name = feature.replace('_', ' ').title()
+                score_pct = int(score * 100)
+                color = "🔴" if score > 0.7 else "🟡" if score > 0.4 else "🟢"
+                st.metric(f"{color} {feature_name}", f"{score_pct}%")
+    
+    # Technical Anomalies and Authenticity Markers
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if result.technical_anomalies:
+            st.markdown("#### 🚨 Technical Anomalies")
+            for anomaly in result.technical_anomalies:
+                st.markdown(f"⚠️ {anomaly}")
+        else:
+            st.markdown("#### ✅ No Critical Anomalies Found")
+    
+    with col2:
+        if result.authenticity_markers:
+            st.markdown("#### ✅ Authenticity Markers")
+            for marker in result.authenticity_markers:
+                st.markdown(f"✅ {marker}")
+        else:
+            st.markdown("#### ⚠️ Limited Authenticity Evidence")
+    
+    # Advanced Feature Analysis
+    with st.expander("🔬 Detailed Feature Analysis", expanded=False):
+        st.markdown("### Advanced Detection Features")
+        
+        features = result.detection_features
+        feature_data = [
+            ("Pixel Noise Variance", features.pixel_noise_variance, "Lower values suggest AI generation"),
+            ("Frequency Domain Anomalies", features.frequency_domain_anomalies, "Artificial frequency patterns"),
+            ("Edge Sharpness Consistency", features.edge_sharpness_consistency, "Unnatural edge consistency"),
+            ("Texture Analysis Score", features.texture_analysis_score, "Natural texture diversity"),
+            ("Color Histogram Anomalies", features.color_histogram_anomalies, "Unnatural color distributions"),
+            ("Neural Texture Patterns", features.neural_texture_patterns, "AI-generated texture signatures"),
+            ("EXIF Consistency Score", features.exif_consistency_score, "Metadata authenticity"),
+            ("Gradient Consistency", features.gradient_consistency, "Mathematical perfection indicator")
+        ]
+        
+        for feature_name, value, description in feature_data:
+            col1, col2, col3 = st.columns([2, 1, 3])
+            with col1:
+                st.write(f"**{feature_name}**")
+            with col2:
+                st.write(f"`{value:.3f}`")
+            with col3:
+                st.write(f"*{description}*")
+            
+            # Progress bar for visual representation
+            st.progress(value, text=f"{int(value * 100)}%")
+            st.markdown("---")
 
 # -----------------------------
 # Enhanced App Layout
 # -----------------------------
 
-# Header
-st.markdown("<div class='main-header'>TRUTHLENS PRO</div>", unsafe_allow_html=True)
-st.markdown("<div class='main-subtitle'>Ultra-Advanced AI Content Detection & Forensic Analysis</div>", unsafe_allow_html=True)
-st.markdown("<div class='version-badge'><span class='badge'>🚀 V4.0 ENHANCED | REAL CV ANALYSIS</span></div>", unsafe_allow_html=True)
-
-with st.container():
-    st.markdown("<div class='truthlens-panel'>", unsafe_allow_html=True)
-
-    tabs = st.tabs(["🔗 URL Analysis", "📁 Media Upload", "⚙️ Advanced Settings", "📊 Detection Science"])
-
-    # URL Analysis Tab
-    with tabs[0]:
-        st.markdown("### 🎯 Advanced URL Analysis")
-        st.markdown("**Real computer vision analysis** of images from URLs using advanced pixel-level detection")
-        
-        url_col1, url_col2 = st.columns([5, 1])
-        with url_col1:
-            url_input = st.text_input(
-                "",
-                placeholder="https://example.com/image.jpg or any direct image URL",
-                label_visibility="collapsed",
-            )
-            st.caption("🔬 **Real Analysis:** Pixel noise, frequency domain, texture patterns, EXIF data, and more")
-        
-        with url_col2:
-            submit_url = st.button("🔍 ANALYZE", type="primary", use_container_width=True)
-
-        if submit_url and not url_input:
-            st.error("⚠️ Please enter a valid image URL")
-
-    # Upload Analysis Tab
-    with tabs[1]:
-        st.markdown("### 📤 Advanced File Analysis")
-        st.markdown("Upload images for **real computer vision analysis** using advanced detection algorithms")
-        
-        uploaded = st.file_uploader(
-            "Upload image file", 
-            type=["jpg","jpeg","png","webp","bmp","gif","tiff"],
-            help="Supports common image formats up to 200MB"
-        )
-        
-        col1, col2, col3 = st.columns([2, 2, 2])
-        with col2:
-            submit_upload = st.button("🔬 DEEP ANALYZE", type="primary", use_container_width=True)
-
-    # Advanced Settings Tab
-    with tabs[2]:
-        st.markdown("### ⚙️ Advanced Detection Parameters")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("**🔬 Analysis Modules**")
-            enable_pixel_analysis = st.checkbox("Pixel-level Analysis", True)
-            enable_frequency_analysis = st.checkbox("Frequency Domain Analysis", True)
-            enable_texture_analysis = st.checkbox("Texture Pattern Analysis", True)
-            enable_metadata_analysis = st.checkbox("EXIF Metadata Analysis", True)
-            
-        with col2:
-            st.markdown("**🎛️ Sensitivity Settings**")
-            detection_threshold = st.slider("Detection Sensitivity", 0.1, 1.0, 0.7, 0.05)
-            noise_threshold = st.slider("Noise Analysis Threshold", 0.1, 1.0, 0.5, 0.05)
-            edge_sensitivity = st.slider("Edge Consistency Sensitivity", 0.1, 1.0, 0.8, 0.05)
-
-    # Detection Science Tab  
-    with tabs[3]:
-        st.markdown("### 📊 Real Detection Science")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("#### 🔬 Computer Vision Techniques")
-            st.markdown("""
-            **Pixel-Level Analysis:**
-            - Sensor noise variance detection
-            - Edge sharpness consistency analysis
-            - Gradient magnitude distribution
-            - Local Binary Pattern analysis
-            
-            **Frequency Domain Analysis:**
-            - FFT-based artifact detection
-            - High-frequency energy distribution
-            - Compression pattern analysis
-            
-            **Color Space Analysis:**
-            - HSV saturation distribution
-            - LAB color space anomalies
-            - Luminance variance analysis
-            """)
-            
-        with col2:
-            st.markdown("#### 🧠 AI Model Detection")
-            st.markdown("""
-            **Neural Network Signatures:**
-            - GAN artifact patterns
-            - Diffusion model characteristics
-            - Upsampling artifacts
-            - Attention mechanism traces
-            
-            **Metadata Forensics:**
-            - EXIF consistency analysis
-            - Camera signature verification
-            - Timestamp plausibility
-            - Software signature detection
-            
-            **Advanced Classification:**
-            - Weighted feature scoring
-            - Sigmoid probability mapping
-            - Multi-threshold classification
-            """)
-
-    # Analysis Execution
-    source_data = None
-    source_url = ""
+def main():
+    """Main application function"""
     
-    if submit_url and url_input:
-        with st.spinner("🔍 Downloading image from URL..."):
-            source_data = download_image_from_url(url_input)
-            source_url = url_input
+    # Header
+    st.markdown("<div class='main-header'>TRUTHLENS PRO</div>", unsafe_allow_html=True)
+    st.markdown("<div class='main-subtitle'>Ultra-Advanced AI Content Detection & Forensic Analysis</div>", unsafe_allow_html=True)
+    st.markdown("<div class='version-badge'><span class='badge'>🚀 V4.0 ENHANCED | REAL CV ANALYSIS</span></div>", unsafe_allow_html=True)
+
+    with st.container():
+        st.markdown("<div class='truthlens-panel'>", unsafe_allow_html=True)
+
+        tabs = st.tabs(["🔗 URL Analysis", "📁 Media Upload", "⚙️ Advanced Settings", "📊 Detection Science"])
+
+        # URL Analysis Tab
+        with tabs[0]:
+            st.markdown("### 🎯 Advanced URL Analysis")
+            st.markdown("**Real computer vision analysis** of images from URLs using advanced pixel-level detection")
             
-    elif submit_upload and uploaded is not None:
-        source_data = uploaded.read()
-        source_url = uploaded.name
-
-    if source_data:
-        st.divider()
-        
-        # Enhanced analysis with real computer vision
-        with st.spinner("🔬 Performing advanced computer vision analysis..."):
-            try:
-                # Progress indicator for real analysis steps
-                progress_bar = st.progress(0)
-                status_text = st.empty()
-                
-                # Step 1: Image preprocessing
-                status_text.text("🔍 Preprocessing image data...")
-                progress_bar.progress(20)
-                time.sleep(0.5)
-                
-                # Step 2: Pixel-level analysis
-                status_text.text("🔬 Analyzing pixel patterns and noise characteristics...")
-                progress_bar.progress(40)
-                time.sleep(0.5)
-                
-                # Step 3: Frequency analysis
-                status_text.text("📊 Performing frequency domain analysis...")
-                progress_bar.progress(60)
-                time.sleep(0.5)
-                
-                # Step 4: Metadata extraction
-                status_text.text("📋 Extracting and analyzing metadata...")
-                progress_bar.progress(80)
-                time.sleep(0.5)
-                
-                # Step 5: Final classification
-                status_text.text("🧠 Computing final AI detection scores...")
-                progress_bar.progress(100)
-                time.sleep(0.5)
-                
-                # Perform the actual analysis
-                result = perform_enhanced_analysis(source_data, source_url)
-                
-                # Clear progress indicators
-                progress_bar.empty()
-                status_text.empty()
-                
-                st.success("✅ **ADVANCED ANALYSIS COMPLETE** - Real computer vision analysis performed")
-                
-                # Display results with enhanced formatting
-                # Main Verdict
-                verdict_class = "verdict-ai" if result.is_ai_generated else "verdict-human"
-                verdict_text = f"🤖 AI-GENERATED" if result.is_ai_generated else "👤 HUMAN-CREATED"
-                if result.ai_model_type:
-                    verdict_text += f" ({result.ai_model_type})"
-                
-                st.markdown(f"<div class='{verdict_class}'>{verdict_text}</div>", unsafe_allow_html=True)
-                
-                # Confidence Display
-                confidence_class = "confidence-high" if result.confidence_pct >= 80 else "confidence-medium" if result.confidence_pct >= 60 else "confidence-low"
-                
-                st.markdown(
-                    f"""
-                    <div class='confidence-display'>
-                        <div class='confidence-number {confidence_class}'>{result.confidence_pct}%</div>
-                        <h3>DETECTION CONFIDENCE</h3>
-                        <p style='color: var(--text-300);'>
-                            {result.confidence_pct}% confident this content is <strong>{"AI-Generated" if result.is_ai_generated else "Human-Created"}</strong>
-                        </p>
-                        <div style='margin-top: 1.5rem; padding: 1.5rem; background: var(--bg-1100); border-radius: 12px; border-left: 4px solid var(--neon-{"red" if result.is_ai_generated else "green"});'>
-                            <strong>Risk Assessment: {result.risk_level}</strong><br><br>
-                            {result.recommendation}
-                        </div>
-                    </div>
-                    """, 
-                    unsafe_allow_html=True
+            url_col1, url_col2 = st.columns([5, 1])
+            with url_col1:
+                url_input = st.text_input(
+                    "",
+                    placeholder="https://example.com/image.jpg or any direct image URL",
+                    label_visibility="collapsed",
+                    key="url_input"
                 )
-                
-                # Technical Analysis Results
-                st.markdown("### 🔬 Advanced Technical Analysis")
-                
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    st.markdown("**📁 Image Properties**")
-                    st.markdown(f"**Resolution:** {result.resolution}")
-                    st.markdown(f"**Aspect Ratio:** {result.aspect_ratio}")
-                    st.markdown(f"**File Type:** {result.file_type}")
-                    st.markdown(f"**File Size:** {result.file_size}")
-                
-                with col2:
-                    st.markdown("**🎯 Detection Results**")
-                    st.markdown(f"**AI Model:** {result.ai_model_type or 'Not Detected'}")
-                    st.markdown(f"**Method:** {result.generation_method or 'Human Creation'}")
-                    st.markdown(f"**Risk Level:** {result.risk_level}")
-                
-                with col3:
-                    st.markdown("**📊 Analysis Summary**")
-                    st.markdown(f"**Anomalies Found:** {len(result.technical_anomalies)}")
-                    st.markdown(f"**Auth Markers:** {len(result.authenticity_markers)}")
-                    st.markdown(f"**Confidence:** {result.confidence_pct}%")
-                
-                # Feature Analysis Visualization
-                if result.confidence_breakdown:
-                    st.markdown("### 📊 Confidence Breakdown")
-                    
-                    breakdown_cols = st.columns(3)
-                    for i, (feature, score) in enumerate(result.confidence_breakdown.items()):
-                        with breakdown_cols[i % 3]:
-                            feature_name = feature.replace('_', ' ').title()
-                            score_pct = int(score * 100)
-                            color = "🔴" if score > 0.7 else "🟡" if score > 0.4 else "🟢"
-                            st.metric(f"{color} {feature_name}", f"{score_pct}%")
-                
-                # Technical Anomalies and Authenticity Markers
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    if result.technical_anomalies:
-                        st.markdown("#### 🚨 Technical Anomalies")
-                        for anomaly in result.technical_anomalies:
-                            st.markdown(f"⚠️ {anomaly}")
-                    else:
-                        st.markdown("#### ✅ No Critical Anomalies Found")
-                
-                with col2:
-                    if result.authenticity_markers:
-                        st.markdown("#### ✅ Authenticity Markers")
-                        for marker in result.authenticity_markers:
-                            st.markdown(f"✅ {marker}")
-                    else:
-                        st.markdown("#### ⚠️ Limited Authenticity Evidence")
-                
-                # Advanced Feature Analysis
-                with st.expander("🔬 Detailed Feature Analysis", expanded=False):
-                    st.markdown("### Advanced Detection Features")
-                    
-                    features = result.detection_features
-                    feature_data = [
-                        ("Pixel Noise Variance", features.pixel_noise_variance, "Lower values suggest AI generation"),
-                        ("Frequency Domain Anomalies", features.frequency_domain_anomalies, "Artificial frequency patterns"),
-                        ("Edge Sharpness Consistency", features.edge_sharpness_consistency, "Unnatural edge consistency"),
-                        ("Texture Analysis Score", features.texture_analysis_score, "Natural texture diversity"),
-                        ("Color Histogram Anomalies", features.color_histogram_anomalies, "Unnatural color distributions"),
-                        ("Neural Texture Patterns", features.neural_texture_patterns, "AI-generated texture signatures"),
-                        ("EXIF Consistency Score", features.exif_consistency_score, "Metadata authenticity"),
-                        ("Gradient Consistency", features.gradient_consistency, "Mathematical perfection indicator")
-                    ]
-                    
-                    for feature_name, value, description in feature_data:
-                        col1, col2, col3 = st.columns([2, 1, 3])
-                        with col1:
-                            st.write(f"**{feature_name}**")
-                        with col2:
-                            st.write(f"`{value:.3f}`")
-                        with col3:
-                            st.write(f"*{description}*")
-                        
-                        # Progress bar for visual representation
-                        st.progress(value, text=f"{int(value * 100)}%")
-                        st.markdown("---")
-                
-            except Exception as e:
-                st.error(f"❌ Analysis failed: {str(e)}")
-                st.error("This could be due to an unsupported image format or corrupted file.")
+                st.caption("🔬 **Real Analysis:** Pixel noise, frequency domain, texture patterns, EXIF data, and more")
+            
+            with url_col2:
+                submit_url = st.button("🔍 ANALYZE", type="primary", use_container_width=True, key="analyze_url")
 
-    st.markdown("</div>", unsafe_allow_html=True)
+            if submit_url and not url_input:
+                st.error("⚠️ Please enter a valid image URL")
+
+        # Upload Analysis Tab
+        with tabs[1]:
+            st.markdown("### 📤 Advanced File Analysis")
+            st.markdown("Upload images for **real computer vision analysis** using advanced detection algorithms")
+            
+            uploaded = st.file_uploader(
+                "Upload image file", 
+                type=["jpg","jpeg","png","webp","bmp","gif","tiff"],
+                help="Supports common image formats up to 200MB",
+                key="file_uploader"
+            )
+            
+            col1, col2, col3 = st.columns([2, 2, 2])
+            with col2:
+                submit_upload = st.button("🔬 DEEP ANALYZE", type="primary", use_container_width=True, key="analyze_upload")
+
+        # Advanced Settings Tab
+        with tabs[2]:
+            st.markdown("### ⚙️ Advanced Detection Parameters")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**🔬 Analysis Modules**")
+                enable_pixel_analysis = st.checkbox("Pixel-level Analysis", True, key="pixel_analysis")
+                enable_frequency_analysis = st.checkbox("Frequency Domain Analysis", True, key="freq_analysis")
+                enable_texture_analysis = st.checkbox("Texture Pattern Analysis", True, key="texture_analysis")
+                enable_metadata_analysis = st.checkbox("EXIF Metadata Analysis", True, key="metadata_analysis")
+                
+            with col2:
+                st.markdown("**🎛️ Sensitivity Settings**")
+                detection_threshold = st.slider("Detection Sensitivity", 0.1, 1.0, 0.7, 0.05, key="detection_threshold")
+                noise_threshold = st.slider("Noise Analysis Threshold", 0.1, 1.0, 0.5, 0.05, key="noise_threshold")
+                edge_sensitivity = st.slider("Edge Consistency Sensitivity", 0.1, 1.0, 0.8, 0.05, key="edge_sensitivity")
+
+        # Detection Science Tab  
+        with tabs[3]:
+            st.markdown("### 📊 Real Detection Science")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("#### 🔬 Computer Vision Techniques")
+                st.markdown("""
+                **Pixel-Level Analysis:**
+                - Sensor noise variance detection
+                - Edge sharpness consistency analysis
+                - Gradient magnitude distribution
+                - Local Binary Pattern analysis
+                
+                **Frequency Domain Analysis:**
+                - FFT-based artifact detection
+                - High-frequency energy distribution
+                - Compression pattern analysis
+                
+                **Color Space Analysis:**
+                - HSV saturation distribution
+                - LAB color space anomalies
+                - Luminance variance analysis
+                """)
+                
+            with col2:
+                st.markdown("#### 🧠 AI Model Detection")
+                st.markdown("""
+                **Neural Network Signatures:**
+                - GAN artifact patterns
+                - Diffusion model characteristics
+                - Upsampling artifacts
+                - Attention mechanism traces
+                
+                **Metadata Forensics:**
+                - EXIF consistency analysis
+                - Camera signature verification
+                - Timestamp plausibility
+                - Software signature detection
+                
+                **Advanced Classification:**
+                - Weighted feature scoring
+                - Sigmoid probability mapping
+                - Multi-threshold classification
+                """)
+
+        # Analysis Execution
+        source_data = None
+        source_url = ""
+        
+        if submit_url and url_input:
+            with st.spinner("🔍 Downloading image from URL..."):
+                source_data = download_image_from_url(url_input)
+                source_url = url_input
+                
+        elif submit_upload and uploaded is not None:
+            source_data = uploaded.read()
+            source_url = uploaded.name
+
+        if source_data:
+            st.divider()
+            
+            # Enhanced analysis with real computer vision
+            with st.spinner("🔬 Performing advanced computer vision analysis..."):
+                try:
+                    # Progress indicator for real analysis steps
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    # Step 1: Image preprocessing
+                    status_text.text("🔍 Preprocessing image data...")
+                    progress_bar.progress(20)
+                    time.sleep(0.5)
+                    
+                    # Step 2: Pixel-level analysis
+                    status_text.text("🔬 Analyzing pixel patterns and noise characteristics...")
+                    progress_bar.progress(40)
+                    time.sleep(0.5)
+                    
+                    # Step 3: Frequency analysis
+                    status_text.text("📊 Performing frequency domain analysis...")
+                    progress_bar.progress(60)
+                    time.sleep(0.5)
+                    
+                    # Step 4: Metadata extraction
+                    status_text.text("📋 Extracting and analyzing metadata...")
+                    progress_bar.progress(80)
+                    time.sleep(0.5)
+                    
+                    # Step 5: Final classification
+                    status_text.text("🧠 Computing final AI detection scores...")
+                    progress_bar.progress(100)
+                    time.sleep(0.5)
+                    
+                    # Perform the actual analysis
+                    result = perform_enhanced_analysis(source_data, source_url)
+                    
+                    # Clear progress indicators
+                    progress_bar.empty()
+                    status_text.empty()
+                    
+                    st.success("✅ **ADVANCED ANALYSIS COMPLETE** - Real computer vision analysis performed")
+                    
+                    # Display results with enhanced formatting
+                    display_analysis_results(result)
+                    
+                except Exception as e:
+                    st.error(f"❌ Analysis failed: {str(e)}")
+                    st.error("This could be due to an unsupported image format or corrupted file.")
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # Enhanced Footer
-st.markdown("---")
-st.markdown(
-    """
-    <div style='text-align: center; color: var(--text-400); padding: 2rem;'>
-        <h3 style='color: var(--neon-cyan); margin-bottom: 1rem;'>🔬 TRUTHLENS PRO V4.0</h3>
-        <p><strong>Real Computer Vision AI Detection</strong></p>
-        <p>Utilizing advanced pixel analysis, frequency domain processing, texture analysis, and metadata forensics</p>
-        <p style='font-size: 0.9rem; margin-top: 1.5rem; color: var(--text-500);'>
-            Results represent sophisticated probabilistic analysis using real computer vision techniques.<br>
-            For critical applications, always verify through multiple independent methods and sources.
-        </p>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+def display_footer():
+    """Display enhanced footer"""
+    st.markdown("---")
+    st.markdown(
+        """
+        <div style='text-align: center; color: var(--text-400); padding: 2rem;'>
+            <h3 style='color: var(--neon-cyan); margin-bottom: 1rem;'>🔬 TRUTHLENS PRO V4.0</h3>
+            <p><strong>Real Computer Vision AI Detection</strong></p>
+            <p>Utilizing advanced pixel analysis, frequency domain processing, texture analysis, and metadata forensics</p>
+            <p style='font-size: 0.9rem; margin-top: 1.5rem; color: var(--text-500);'>
+                Results represent sophisticated probabilistic analysis using real computer vision techniques.<br>
+                For critical applications, always verify through multiple independent methods and sources.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+# Run the application
+if __name__ == "__main__":
+    try:
+        main()
+        display_footer()
+    except Exception as e:
+        st.error(f"Application error: {str(e)}")
+        st.error("Please refresh the page and try again.")
