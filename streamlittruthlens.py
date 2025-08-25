@@ -5541,7 +5541,6 @@ from scipy import stats, ndimage
 from skimage import feature, filters, measure, segmentation
 import matplotlib.pyplot as plt
 import warnings
-import cv2
 import tempfile
 import subprocess
 from datetime import datetime, timezone
@@ -6161,5 +6160,6 @@ def comprehensive_video_analysis(video_path: str, source_url: str = "") -> Tuple
         compression_pattern_analysis=1.0 - compression_analysis.get('compression_naturalness', 0.5),
         facial_morphing_detection=deepfake_analysis.get('artifact_detection_score', 0.5),
         lip_sync_consistency=deepfake_analysis.get('face_consistency_score', 0.5),
+
 
 
