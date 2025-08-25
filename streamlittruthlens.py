@@ -6817,7 +6817,11 @@ def comprehensive_ai_detection_enhanced(image_data: Union[bytes, np.ndarray], so
             image_array = np.array(img)
         else:
             image_array = image_data
-        
+
+    except Exception as e:
+        st.error(f"Error in comprehensive AI detection: {e}")
+        return EnhancedDetectionFeatures()
+
         # Ensure image is in RGB format
         if len(image_array.shape) == 3 and image_array.shape[2] == 4:  # RGBA
             image_array = image_array[:, :, :3]  # Remove alpha channel
@@ -7512,5 +7516,6 @@ def advanced_ai_classification(features: EnhancedDetectionFeatures, url_analysis
             color_clustering=0.5, luminance_gradient=0.5, neural_texture_patterns=0.5,
             upsampling_artifacts=0.5, attention_map_irregularities=0.5, latent_space_signatures=0.5,
             generative_model_signatures
+
 
 
