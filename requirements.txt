@@ -1,6 +1,5 @@
 streamlit
 streamlit-option-menu
-opencv-contrib-python
 Pillow
 imageio
 imageio-ffmpeg
@@ -26,3 +25,4 @@ tqdm
 psutil
 memory-profiler
 opencv-python-headless
+
