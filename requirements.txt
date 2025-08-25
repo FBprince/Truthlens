@@ -1,13 +1,9 @@
+streamlit
 opencv-python
-ffmpeg-python
+numpy
 scikit-image
 scipy
-numpy
-streamlit
 Pillow
 requests
 matplotlib
-opencv-python
-
-
-
+ffmpeg-python
