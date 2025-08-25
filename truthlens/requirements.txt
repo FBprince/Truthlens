@@ -1,0 +1,9 @@
+streamlit
+requests
+pillow
+opencv-python-headless
+transformers
+torch
+numpy
+imageio
+imageio-ffmpeg

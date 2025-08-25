@@ -1,0 +1,9 @@
+node_modules
+.git
+.gitignore
+dist
+.cache
+.DS_Store
+.vscode
+**/npm-debug.log
+**/yarn-error.log
