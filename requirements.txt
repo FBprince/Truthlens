@@ -1,10 +1,10 @@
-streamlit
 opencv-python
-Pillow
+ffmpeg-python
 scikit-image
-numpy
-scipy
-matplotlib
+scipy, numpy
+streamlit
+Pillow
 requests
-pandas
+matplotlib
+
 
