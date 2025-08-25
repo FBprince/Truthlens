@@ -5188,6 +5188,7 @@ if __name__ == "__main__":
     except Exception as e:
         st.error(f"Application error: {str(e)}")
         st.error("Please refresh the page and try again. If the problem persists, contact support.")
+      
 def download_image_from_url(url: str) -> Optional[bytes]:
     """Enhanced image download with social media support"""
     try:
@@ -7511,4 +7512,5 @@ def advanced_ai_classification(features: EnhancedDetectionFeatures, url_analysis
             color_clustering=0.5, luminance_gradient=0.5, neural_texture_patterns=0.5,
             upsampling_artifacts=0.5, attention_map_irregularities=0.5, latent_space_signatures=0.5,
             generative_model_signatures
+
 
