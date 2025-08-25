@@ -7489,33 +7489,47 @@ def extract_and_analyze_metadata(image_path: Union[str, bytes]) -> Dict[str, flo
 def analyze_url_patterns(url: str) -> Dict[str, float]:
     """Wrapper for backward compatibility"""
     return analyze_url_patterns_enhanced(url)
-
-def advanced_ai_classification(features: EnhancedDetectionFeatures, url_analysis: Dict) -> Tuple[bool, int, str]:
+  
+def advanced_ai_classification(
+    features: EnhancedDetectionFeatures, 
+    url_analysis: Dict
+) -> EnhancedDetectionFeatures:
     """Wrapper for backward compatibility"""
-    is_ai, confidence, risk_level, _ = legal_grade_classification(features, url_analysis)
-    return is_ai, confidence, risk_level=generative_analysis.get('model_signatures', 0.5),
-            
-            # Enhanced Metadata and Technical
-            exif_consistency_score=metadata_analysis.get('exif_consistency', 0.5),
-            timestamp_plausibility=metadata_analysis.get('creation_plausibility', 0.5),
-            color_profile_analysis=color_analysis.get('luminance_variance', 0.5),
-            file_entropy_analysis=compression_analysis.get('file_entropy', 0.5),
-            camera_signature_analysis=metadata_analysis.get('camera_model_analysis', 0.5)
+
+    try:
+        # Example call to existing classification logic
+        is_ai, confidence, _, _ = legal_grade_classification(features, url_analysis)
+
+        # Collect extra analysis results
+        risk_level = generative_analysis.get("model_signatures", 0.5)
+        exif_consistency_score = metadata_analysis.get("exif_consistency", 0.5)
+        timestamp_plausibility = metadata_analysis.get("creation_plausibility", 0.5)
+        color_profile_analysis = color_analysis.get("luminance_variance", 0.5)
+        file_entropy_analysis = compression_analysis.get("file_entropy", 0.5)
+        camera_signature_analysis = metadata_analysis.get("camera_model_analysis", 0.5)
+
+        return EnhancedDetectionFeatures(
+            is_ai=is_ai,
+            confidence=confidence,
+            risk_level=risk_level,
+            details={
+                "exif_consistency_score": exif_consistency_score,
+                "timestamp_plausibility": timestamp_plausibility,
+                "color_profile_analysis": color_profile_analysis,
+                "file_entropy_analysis": file_entropy_analysis,
+                "camera_signature_analysis": camera_signature_analysis,
+            }
         )
-        
+
     except Exception as e:
         st.error(f"Error in enhanced comprehensive detection: {str(e)}")
-        # Return default values in case of error
+        # Return safe defaults
         return EnhancedDetectionFeatures(
-            pixel_noise_variance=0.5, noise_consistency=0.5, edge_sharpness_consistency=0.5,
-            edge_density=0.5, frequency_domain_anomalies=0.5, compression_artifacts=0.5,
-            texture_analysis_score=0.5, glcm_texture_analysis=0.5, color_histogram_anomalies=0.5,
-            gradient_consistency=0.5, local_binary_patterns=0.5, statistical_naturalness=0.5,
-            histogram_entropy=0.5, saturation_analysis=0.5, hue_diversity=0.5,
-            brightness_variance=0.5, color_cast_analysis=0.5, lightness_diversity=0.5,
-            color_clustering=0.5, luminance_gradient=0.5, neural_texture_patterns=0.5,
-            upsampling_artifacts=0.5, attention_map_irregularities=0.5, latent_space_signatures=0.5,
-            generative_model_signatures
+            is_ai=False,
+            confidence=0.0,
+            risk_level=0.5,
+            details={"error": str(e)}
+        )
 
 
 
