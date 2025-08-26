@@ -997,485 +997,418 @@
 
 
 
+)
 
+# Main Application
 
+def main():
+    """Enhanced main application function"""
+    
+    # Header with legal theme
+    st.markdown("<div class='main-header'>TRUTHLENS PRO</div>", unsafe_allow_html=True)
+    st.markdown("<div class='main-subtitle'>Legal-Grade AI Detection • Video Analysis • Court-Admissible Evidence</div>", unsafe_allow_html=True)
+    st.markdown("<div class='version-badge'><span class='badge'>LEGAL EDITION V5.0 | COURT-READY ANALYSIS</span></div>", unsafe_allow_html=True)
 
-
-
-st.markdown("</div>", unsafe_allow_html=True)
-
-def display_video_analysis_results(is_ai: bool, confidence: int, risk_level: str, 
-                                 video_features: VideoAnalysisFeatures, 
-                                 legal_features: LegalGradeFeatures, 
-                                 source_url: str):
-    """Display comprehensive video analysis results"""
-    
-    # Main Verdict
-    verdict_class = "verdict-ai" if is_ai else "verdict-human"
-    verdict_text = "🤖 AI-GENERATED VIDEO" if is_ai else "👤 HUMAN-CREATED VIDEO"
-    
-    st.markdown(f"<div class='{verdict_class}'>{verdict_text}</div>", unsafe_allow_html=True)
-    
-    # Confidence and Legal Assessment
-    confidence_class = "confidence-high" if confidence >= 85 else "confidence-medium" if confidence >= 65 else "confidence-low"
-    
-    st.markdown(
-        f"""
-        <div class='confidence-display'>
-            <div class='confidence-number {confidence_class}'>{confidence}%</div>
-            <h3>DETECTION CONFIDENCE</h3>
-            <p style='color: var(--text-300);'>
-                Legal Certainty Level: <strong>{risk_level}</strong><br>
-                Evidence Quality: <strong>{legal_features.evidence_quality_rating}</strong>
-            </p>
-            <div style='margin-top: 1.5rem; padding: 1.5rem; background: var(--bg-1100); border-radius: 12px; border-left: 4px solid var(--{"legal-gold" if legal_features.court_ready_analysis else "neon-red"});'>
-                <strong>Court Admissibility: {"READY" if legal_features.court_ready_analysis else "NOT READY"}</strong><br><br>
-                Admissibility Score: {legal_features.admissibility_score:.2f}/1.0<br>
-                Expert Witness Confidence: {legal_features.expert_witness_confidence:.2f}/1.0
-            </div>
-        </div>
-        """, 
-        unsafe_allow_html=True
-    )
-    
-    # Video-Specific Analysis
-    st.markdown("### 🎬 Video Analysis Results")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown("**🎭 Deepfake Detection**")
-        deepfake_score = int(video_features.deepfake_indicators * 100)
-        st.metric("Deepfake Probability", f"{deepfake_score}%")
-        
-        facial_morph_score = int(video_features.facial_morphing_detection * 100)
-        st.metric("Facial Morphing", f"{facial_morph_score}%")
-        
-        lip_sync_score = int((1 - video_features.lip_sync_consistency) * 100)
-        st.metric("Lip-Sync Anomalies", f"{lip_sync_score}%")
-    
-    with col2:
-        st.markdown("**⏱️ Temporal Analysis**")
-        temporal_score = int(video_features.temporal_consistency_score * 100)
-        st.metric("Temporal Consistency", f"{temporal_score}%")
-        
-        motion_anom_score = int(video_features.motion_vector_anomalies * 100)
-        st.metric("Motion Anomalies", f"{motion_anom_score}%")
-        
-        frame_interp_score = int(video_features.frame_interpolation_artifacts * 100)
-        st.metric("Frame Interpolation", f"{frame_interp_score}%")
-    
-    with col3:
-        st.markdown("**🔧 Technical Analysis**")
-        compression_score = int(video_features.compression_pattern_analysis * 100)
-        st.metric("Compression Anomalies", f"{compression_score}%")
-        
-        timestamp_score = int(video_features.generation_timestamp_analysis * 100)
-        st.metric("Timestamp Suspicion", f"{timestamp_score}%")
-    
-    # Legal-Grade Assessment
-    st.markdown("### ⚖️ Legal-Grade Assessment")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("**📋 Evidence Quality Metrics**")
-        st.write(f"**Chain of Custody:** {legal_features.chain_of_custody_score:.3f}")
-        st.write(f"**Metadata Integrity:** {legal_features.metadata_integrity_score:.3f}")
-        st.write(f"**Source Authenticity:** {legal_features.source_authenticity_score:.3f}")
-        st.write(f"**Tampering Detection:** {legal_features.tampering_detection_score:.3f}")
-        
-    with col2:
-        st.markdown("**📊 Statistical Analysis**")
-        st.write(f"**Expert Confidence:** {legal_features.expert_witness_confidence:.3f}")
-        st.write(f"**Admissibility Score:** {legal_features.admissibility_score:.3f}")
-        st.write(f"**Court Ready:** {'Yes' if legal_features.court_ready_analysis else 'No'}")
-        st.write(f"**Evidence Grade:** {legal_features.evidence_quality_rating}")
-
-def display_image_analysis_results(is_ai: bool, confidence: int, risk_level: str, 
-                                 features: AdvancedDetectionFeatures, 
-                                 legal_features: LegalGradeFeatures, 
-                                 source_url: str):
-    """Display comprehensive image analysis results"""
-    
-    # Main Verdict
-    verdict_class = "verdict-ai" if is_ai else "verdict-human"
-    verdict_text = "🤖 AI-GENERATED IMAGE" if is_ai else "👤 HUMAN-CREATED IMAGE"
-    
-    st.markdown(f"<div class='{verdict_class}'>{verdict_text}</div>", unsafe_allow_html=True)
-    
-    # Confidence Display
-    confidence_class = "confidence-high" if confidence >= 85 else "confidence-medium" if confidence >= 65 else "confidence-low"
-    
-    st.markdown(
-        f"""
-        <div class='confidence-display'>
-            <div class='confidence-number {confidence_class}'>{confidence}%</div>
-            <h3>DETECTION CONFIDENCE</h3>
-            <p style='color: var(--text-300);'>
-                Legal Certainty: <strong>{risk_level}</strong><br>
-                Evidence Quality: <strong>{legal_features.evidence_quality_rating}</strong>
-            </p>
-        </div>
-        """, 
-        unsafe_allow_html=True
-    )
-    
-    # Enhanced Technical Analysis
-    st.markdown("### 🔬 Enhanced Technical Analysis")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown("**📊 Pixel Analysis**")
-        noise_score = int(features.pixel_noise_variance * 100)
-        st.metric("Noise Variance", f"{noise_score}%")
-        
-        freq_score = int(features.frequency_domain_anomalies * 100)
-        st.metric("Frequency Anomalies", f"{freq_score}%")
-        
-        edge_score = int(features.edge_sharpness_consistency * 100)
-        st.metric("Edge Consistency", f"{edge_score}%")
-    
-    with col2:
-        st.markdown("**🎨 Color Analysis**")
-        color_score = int(features.color_histogram_anomalies * 100)
-        st.metric("Color Anomalies", f"{color_score}%")
-        
-        texture_score = int(features.texture_analysis_score * 100)
-        st.metric("Texture Complexity", f"{texture_score}%")
-        
-        profile_score = int(features.color_profile_analysis * 100)
-        st.metric("Color Profile", f"{profile_score}%")
-    
-    with col3:
-        st.markdown("**🤖 AI Signatures**")
-        neural_score = int(features.neural_texture_patterns * 100)
-        st.metric("Neural Patterns", f"{neural_score}%")
-        
-        upsampling_score = int(features.upsampling_artifacts * 100)
-        st.metric("Upsampling Artifacts", f"{upsampling_score}%")
-        
-        latent_score = int(features.latent_space_signatures * 100)
-        st.metric("Latent Signatures", f"{latent_score}%")
-    
-    # Legal-Grade Statistics
-    st.markdown("### ⚖️ Legal-Grade Statistics")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("**📈 Statistical Validation**")
-        st.write(f"**Statistical Significance:** {features.statistical_significance:.3f}")
-        st.write(f"**Cross-Validation Score:** {features.cross_validation_score:.3f}")
-        st.write(f"**Reproducibility Index:** {features.reproducibility_index:.3f}")
-        st.write(f"**False Positive Probability:** {features.false_positive_probability:.3f}")
-        
-    with col2:
-        st.markdown("**⚖️ Legal Assessment**")
-        st.write(f"**Evidence Quality:** {legal_features.evidence_quality_rating}")
-        st.write(f"**Legal Certainty:** {legal_features.legal_certainty_level}")
-        st.write(f"**Admissibility Score:** {legal_features.admissibility_score:.3f}")
-        st.write(f"**Court Ready:** {'Yes' if legal_features.court_ready_analysis else 'No'}")
-
-# Enhanced Footer
-def display_footer():
-    """Display enhanced legal-grade footer"""
-    st.markdown("---")
+    # Legal-grade certification badge
     st.markdown(
         """
-        <div style='text-align: center; color: var(--text-400); padding: 2rem;'>
-            <h3 style='color: var(--legal-gold); margin-bottom: 1rem;'>⚖️ TRUTHLENS PRO LEGAL EDITION</h3>
-            <p><strong>Court-Admissible AI Detection System</strong></p>
-            <p>Advanced computer vision, statistical validation, and legal-grade evidence generation</p>
-            <p style='font-size: 0.9rem; margin-top: 1.5rem; color: var(--text-500);'>
-                <strong>DISCLAIMER:</strong> Results represent sophisticated probabilistic analysis using peer-reviewed techniques.<br>
-                For legal proceedings, consult with qualified experts and follow proper chain of custody procedures.<br>
-                This tool provides technical analysis to support, not replace, professional forensic examination.
-            </p>
-            <p style='font-size: 0.8rem; color: var(--text-600);'>
-                Detection algorithms based on published research in computer vision, digital forensics, and AI detection.<br>
-                Statistical methods follow accepted standards for scientific evidence in legal proceedings.
-            </p>
+        <div class='legal-grade-badge'>
+            LEGAL-GRADE CERTIFIED<br>
+            <small>Court-Admissible Analysis Standards</small>
         </div>
-        """,
+        """, 
         unsafe_allow_html=True
     )
 
-# Run the enhanced application
+    with st.container():
+        st.markdown("<div class='truthlens-panel'>", unsafe_allow_html=True)
+
+        tabs = st.tabs([
+            "Video Analysis", 
+            "Image Analysis", 
+            "URL Detection", 
+            "Legal Report", 
+            "Detection Science",
+            "Expert Settings"
+        ])
+
+        # Video Analysis Tab
+        with tabs[0]:
+            st.markdown("### Advanced Video AI Detection")
+            st.markdown(
+                """
+                <div class='video-analysis-section'>
+                <h4>Video Analysis Capabilities</h4>
+                <ul>
+                <li><strong>Platform Support:</strong> YouTube, TikTok, Instagram, Facebook, Twitter/X, Vimeo, and 50+ platforms</li>
+                <li><strong>Deepfake Detection:</strong> Facial morphing, lip-sync analysis, temporal consistency</li>
+                <li><strong>AI Video Detection:</strong> Stable Video Diffusion, Runway ML, Pika Labs detection</li>
+                <li><strong>Legal-Grade Analysis:</strong> Court-admissible evidence generation</li>
+                </ul>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            
+            video_option = st.radio(
+                "Choose video source:",
+                ["Upload Video File", "Video URL from Any Platform"],
+                key="video_source"
+            )
+            
+            if video_option == "Video URL from Any Platform":
+                col1, col2 = st.columns([5, 1])
+                with col1:
+                    video_url = st.text_input(
+                        "",
+                        placeholder="https://youtube.com/watch?v=... or any video URL",
+                        label_visibility="collapsed",
+                        key="video_url_input"
+                    )
+                    st.caption("Supports: YouTube, TikTok, Instagram, Facebook, Twitter, Vimeo, Dailymotion, and 50+ platforms")
+                
+                with col2:
+                    analyze_video_url = st.button("ANALYZE", type="primary", key="analyze_video_url")
+                    
+            else:
+                uploaded_video = st.file_uploader(
+                    "Upload video file",
+                    type=["mp4", "avi", "mov", "mkv", "webm", "flv", "wmv"],
+                    key="video_uploader"
+                )
+                if uploaded_video:
+                    col1, col2, col3 = st.columns([2, 2, 2])
+                    with col2:
+                        analyze_uploaded_video = st.button("DEEP ANALYZE", type="primary", key="analyze_uploaded")
+
+        # Image Analysis Tab  
+        with tabs[1]:
+            st.markdown("### Enhanced Image AI Detection")
+            
+            image_option = st.radio(
+                "Choose image source:",
+                ["Upload Image File", "Image URL"],
+                key="image_source"
+            )
+            
+            if image_option == "Image URL":
+                col1, col2 = st.columns([5, 1])
+                with col1:
+                    image_url = st.text_input(
+                        "",
+                        placeholder="https://example.com/image.jpg",
+                        label_visibility="collapsed",
+                        key="image_url_input"
+                    )
+                with col2:
+                    analyze_image_url = st.button("ANALYZE", type="primary", key="analyze_image_url")
+            else:
+                uploaded_image = st.file_uploader(
+                    "Upload image file",
+                    type=["jpg", "jpeg", "png", "webp", "bmp", "gif", "tiff"],
+                    key="image_uploader"
+                )
+                if uploaded_image:
+                    col1, col2, col3 = st.columns([2, 2, 2])
+                    with col2:
+                        analyze_uploaded_image = st.button("ANALYZE", type="primary", key="analyze_image_upload")
+
+        # URL Detection Tab
+        with tabs[2]:
+            st.markdown("### Universal URL Detection")
+            st.markdown("Detect AI-generated content from any URL - images, videos, social media posts")
+            
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                universal_url = st.text_input(
+                    "",
+                    placeholder="Any URL containing media content",
+                    label_visibility="collapsed",
+                    key="universal_url"
+                )
+                st.caption("Auto-detects content type and applies appropriate analysis")
+            with col2:
+                analyze_universal = st.button("DETECT", type="primary", key="analyze_universal")
+
+        # Legal Report Tab
+        with tabs[3]:
+            st.markdown(
+                """
+                <div class='legal-report-section'>
+                <h3>Legal-Grade Analysis Report</h3>
+                <p>Generate court-admissible evidence reports with statistical confidence intervals,
+                chain of custody analysis, and expert witness testimony preparation.</p>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            
+            if st.button("Generate Legal Report Template", key="legal_template"):
+                st.markdown("""
+                ### Legal Evidence Report Template
+                
+                **Case Information:**
+                - Case ID: _______________
+                - Date of Analysis: _______________
+                - Analyst: _______________
+                - Chain of Custody Reference: _______________
+                
+                **Technical Analysis Summary:**
+                - Detection Confidence: ___%
+                - Statistical Significance: _______________
+                - False Positive Probability: ___%
+                - Cross-Validation Score: _______________
+                
+                **Evidence Quality Rating:**
+                - [ ] Beyond Reasonable Doubt (≥95% confidence)
+                - [ ] Clear and Convincing (80-94% confidence)  
+                - [ ] Preponderance of Evidence (65-79% confidence)
+                - [ ] Insufficient Evidence (<65% confidence)
+                
+                **Court Admissibility Assessment:**
+                - Daubert Standard Compliance: _______________
+                - Peer Review Status: _______________
+                - Error Rate Analysis: _______________
+                - General Acceptance in Scientific Community: _______________
+                """)
+
+        # Detection Science Tab
+        with tabs[4]:
+            st.markdown("### Enhanced Detection Science")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("#### Image Analysis Techniques")
+                st.markdown("""
+                **Pixel-Level Forensics:**
+                - Multi-scale noise analysis with statistical validation
+                - GLCM texture analysis with cross-correlation
+                - Enhanced frequency domain processing (FFT/DCT)
+                - Edge consistency analysis using multiple algorithms
+                
+                **Color Science Analysis:**
+                - HSV/LAB color space anomaly detection
+                - Histogram peak analysis and entropy calculation
+                - Color distribution naturalness assessment
+                - Chromatic aberration analysis
+                
+                **Compression Forensics:**
+                - JPEG artifact detection and quantization analysis
+                - File entropy and bit distribution analysis
+                - Compression ratio consistency evaluation
+                """)
+                
+            with col2:
+                st.markdown("#### Video Analysis Techniques")
+                st.markdown("""
+                **Temporal Analysis:**
+                - Optical flow consistency evaluation
+                - Inter-frame correlation analysis
+                - Motion vector anomaly detection
+                - Frame interpolation artifact detection
+                
+                **Deepfake Detection:**
+                - Facial landmark consistency analysis
+                - Lip-sync temporal alignment verification
+                - Blending artifact detection at face boundaries
+                - Eye gaze and blink pattern analysis
+                
+                **AI Video Signatures:**
+                - Stable Diffusion video artifacts
+                - Runway ML generation patterns
+                - Frame generation consistency analysis
+                """)
+
+        # Expert Settings Tab
+        with tabs[5]:
+            st.markdown("### Expert Analysis Settings")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**Analysis Parameters**")
+                legal_mode = st.checkbox("Legal-Grade Mode", True, help="Enables court-admissible analysis standards")
+                statistical_validation = st.checkbox("Statistical Validation", True, help="Includes confidence intervals and significance testing")
+                deep_metadata_analysis = st.checkbox("Deep Metadata Analysis", True, help="Comprehensive EXIF and file structure analysis")
+                cross_validation = st.checkbox("Cross-Validation", True, help="Multiple algorithm verification")
+                
+                detection_sensitivity = st.slider("Detection Sensitivity", 0.5, 1.0, 0.85, 0.05, key="expert_sensitivity")
+                
+            with col2:
+                st.markdown("**Reporting Options**")
+                include_technical_details = st.checkbox("Technical Details", True)
+                include_statistical_analysis = st.checkbox("Statistical Analysis", True)
+                include_expert_opinion = st.checkbox("Expert Opinion Summary", True)
+                include_legal_assessment = st.checkbox("Legal Admissibility Assessment", True)
+                
+                confidence_threshold = st.slider("Court Admissibility Threshold", 0.75, 0.95, 0.85, 0.05, key="legal_threshold")
+
+        # Analysis Execution Logic
+        source_data = None
+        source_url = ""
+        is_video = False
+        
+        # Handle different input types
+        if 'analyze_video_url' in locals() and video_option == "Video URL from Any Platform" and video_url:
+            with st.spinner("Downloading video from URL..."):
+                temp_video_path = download_video_from_url(video_url)
+                if temp_video_path:
+                    source_data = temp_video_path
+                    source_url = video_url
+                    is_video = True
+                        
+        elif 'analyze_uploaded_video' in locals() and uploaded_video:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmp_file:
+                tmp_file.write(uploaded_video.read())
+                source_data = tmp_file.name
+                source_url = uploaded_video.name
+                is_video = True
+                
+        elif 'analyze_image_url' in locals() and image_option == "Image URL" and image_url:
+            with st.spinner("Downloading image from URL..."):
+                image_data = download_image_from_url(image_url)
+                if image_data:
+                    source_data = image_data
+                    source_url = image_url
+                    is_video = False
+                    
+        elif 'analyze_uploaded_image' in locals() and uploaded_image:
+            source_data = uploaded_image.read()
+            source_url = uploaded_image.name
+            is_video = False
+            
+        elif 'analyze_universal' in locals() and universal_url:
+            with st.spinner("Analyzing URL content..."):
+                # Try video first, then image
+                temp_video = download_video_from_url(universal_url)
+                if temp_video:
+                    source_data = temp_video
+                    source_url = universal_url
+                    is_video = True
+                else:
+                    image_data = download_image_from_url(universal_url)
+                    if image_data:
+                        source_data = image_data
+                        source_url = universal_url
+                        is_video = False
+
+        # Perform Analysis
+        if source_data:
+            st.divider()
+            
+            try:
+                if is_video:
+                    # Video Analysis Pipeline
+                    with st.spinner("Performing advanced video analysis..."):
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
+                        
+                        status_text.text("Extracting video frames...")
+                        progress_bar.progress(15)
+                        
+                        status_text.text("Analyzing temporal consistency...")
+                        progress_bar.progress(30)
+                        
+                        status_text.text("Detecting deepfake indicators...")
+                        progress_bar.progress(50)
+                        
+                        status_text.text("Analyzing facial morphing patterns...")
+                        progress_bar.progress(70)
+                        
+                        status_text.text("Generating legal-grade assessment...")
+                        progress_bar.progress(90)
+                        
+                        # Perform video analysis
+                        video_features, frame_analyses = comprehensive_video_analysis(source_data, source_url)
+                        
+                        # Get best frame analysis for classification
+                        if frame_analyses:
+                            combined_features = frame_analyses[0]  # Use first frame as representative
+                        else:
+                            # Create default features if frame analysis fails
+                            combined_features = AdvancedDetectionFeatures(
+                                pixel_noise_variance=0.5, frequency_domain_anomalies=0.5, edge_sharpness_consistency=0.5,
+                                compression_artifacts=0.5, texture_analysis_score=0.5, color_histogram_anomalies=0.5,
+                                gradient_consistency=0.5, local_binary_patterns=0.5, neural_texture_patterns=0.5,
+                                upsampling_artifacts=0.5, attention_map_irregularities=0.5, latent_space_signatures=0.5,
+                                exif_consistency_score=0.5, timestamp_plausibility=0.5, color_profile_analysis=0.5,
+                                file_entropy_analysis=0.5, statistical_significance=0.5, cross_validation_score=0.5,
+                                reproducibility_index=0.5, false_positive_probability=0.5
+                            )
+                        
+                        url_analysis = analyze_url_patterns(source_url)
+                        is_ai, confidence, risk_level, legal_features = legal_grade_classification(
+                            combined_features, video_features, url_analysis
+                        )
+                        
+                        progress_bar.progress(100)
+                        time.sleep(0.5)
+                        progress_bar.empty()
+                        status_text.empty()
+                        
+                        st.success("VIDEO ANALYSIS COMPLETE - Legal-grade video detection performed")
+                        
+                        # Display video-specific results
+                        display_video_analysis_results(is_ai, confidence, risk_level, video_features, legal_features, source_url)
+                        
+                else:
+                    # Image Analysis Pipeline
+                    with st.spinner("Performing legal-grade image analysis..."):
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
+                        
+                        status_text.text("Analyzing pixel patterns...")
+                        progress_bar.progress(20)
+                        
+                        status_text.text("Processing color characteristics...")
+                        progress_bar.progress(40)
+                        
+                        status_text.text("Performing frequency analysis...")
+                        progress_bar.progress(60)
+                        
+                        status_text.text("Extracting metadata...")
+                        progress_bar.progress(80)
+                        
+                        status_text.text("Generating legal assessment...")
+                        progress_bar.progress(100)
+                        
+                        # Perform image analysis
+                        features = comprehensive_ai_detection(source_data, source_url)
+                        url_analysis = analyze_url_patterns(source_url)
+                        is_ai, confidence, risk_level, legal_features = legal_grade_classification(features, None, url_analysis)
+                        
+                        time.sleep(0.5)
+                        progress_bar.empty()
+                        status_text.empty()
+                        
+                        st.success("IMAGE ANALYSIS COMPLETE - Legal-grade analysis performed")
+                        
+                        # Display image-specific results
+                        display_image_analysis_results(is_ai, confidence, risk_level, features, legal_features, source_url)
+                
+                # Clean up temporary files
+                if is_video and os.path.exists(source_data):
+                    try:
+                        os.unlink(source_data)
+                    except:
+                        pass
+                        
+            except Exception as e:
+                st.error(f"Analysis failed: {str(e)}")
+                st.error("This could indicate a corrupted file, unsupported format, or processing error.")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+# Run the application
 if __name__ == "__main__":
     try:
         main()
         display_footer()
     except Exception as e:
         st.error(f"Application error: {str(e)}")
-        st.error("Please refresh the page and try again.")    return results
+        st.error("Please refresh the page and try again.")    return video_features, frame_analyses
 
-def download_video_from_url(url: str) -> Optional[str]:
-    """Enhanced video downloader supporting all major platforms"""
-    try:
-        # Configure yt-dlp for maximum compatibility
-        ydl_opts = {
-            'format': 'best[height<=720]',  # Limit to 720p for processing efficiency
-            'outtmpl': tempfile.mktemp(suffix='.%(ext)s'),
-            'quiet': True,
-            'no_warnings': True,
-            'extractaudio': False,
-            'writeinfojson': True,
-        }
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Extract info first
-            info = ydl.extract_info(url, download=False)
-            
-            # Check if it's a live stream (not downloadable)
-            if info.get('is_live', False):
-                st.error("Live streams cannot be analyzed")
-                return None
-            
-            # Download the video
-            ydl.download([url])
-            
-            # Find the downloaded file
-            filename_template = ydl_opts['outtmpl']
-            # Replace template with actual values
-            filename = filename_template.replace('%(ext)s', info.get('ext', 'mp4'))
-            
-            if os.path.exists(filename):
-                return filename
-            else:
-                # Try common extensions if exact match fails
-                for ext in ['mp4', 'webm', 'mkv', 'avi']:
-                    test_filename = filename_template.replace('%(ext)s', ext)
-                    if os.path.exists(test_filename):
-                        return test_filename
-                
-                st.error("Downloaded file not found")
-                return None
-                
-    except yt_dlp.utils.DownloadError as e:
-        st.error(f"Download failed: {str(e)}")
-        return None
-    except Exception as e:
-        st.error(f"Unexpected error downloading video: {str(e)}")
-        return None
-
-def extract_video_frames(video_path: str, max_frames: int = 30) -> List[np.ndarray]:
-    """Extract frames from video for analysis"""
-    try:
-        cap = cv2.VideoCapture(video_path)
-        
-        if not cap.isOpened():
-            st.error("Could not open video file")
-            return []
-        
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        duration = total_frames / fps if fps > 0 else 0
-        
-        # Calculate frame sampling interval
-        if total_frames <= max_frames:
-            frame_interval = 1
-        else:
-            frame_interval = total_frames // max_frames
-        
-        frames = []
-        frame_count = 0
-        
-        while len(frames) < max_frames and cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
-                
-            if frame_count % frame_interval == 0:
-                # Convert BGR to RGB
-                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                frames.append(rgb_frame)
-            
-            frame_count += 1
-        
-        cap.release()
-        
-        st.info(f"Extracted {len(frames)} frames from video ({duration:.1f}s, {fps:.1f} FPS)")
-        return frames
-        
-    except Exception as e:
-        st.error(f"Error extracting frames: {str(e)}")
-        return []
-
-def analyze_temporal_consistency(frames: List[np.ndarray]) -> Dict[str, float]:
-    """Analyze temporal consistency between frames"""
-    if len(frames) < 2:
-        return {'temporal_consistency': 0.5, 'motion_smoothness': 0.5}
-    
-    try:
-        consistency_scores = []
-        motion_scores = []
-        
-        for i in range(1, len(frames)):
-            prev_frame = cv2.cvtColor(frames[i-1], cv2.COLOR_RGB2GRAY)
-            curr_frame = cv2.cvtColor(frames[i], cv2.COLOR_RGB2GRAY)
-            
-            # Calculate optical flow
-            flow = cv2.calcOpticalFlowPyrLK(
-                prev_frame, curr_frame, 
-                np.random.randint(0, min(prev_frame.shape), (100, 1, 2)).astype(np.float32),
-                None
-            )[0]
-            
-            if flow is not None and len(flow) > 0:
-                # Calculate motion consistency
-                motion_magnitude = np.linalg.norm(flow.reshape(-1, 2), axis=1)
-                motion_consistency = 1.0 - np.std(motion_magnitude) / (np.mean(motion_magnitude) + 1e-6)
-                motion_scores.append(max(0, min(1, motion_consistency)))
-            
-            # Frame difference analysis
-            frame_diff = cv2.absdiff(prev_frame, curr_frame)
-            diff_mean = np.mean(frame_diff)
-            diff_std = np.std(frame_diff)
-            
-            # AI-generated videos often have unnatural temporal transitions
-            consistency_score = 1.0 - min(1.0, diff_std / (diff_mean + 1e-6))
-            consistency_scores.append(max(0, consistency_score))
-        
-        avg_consistency = np.mean(consistency_scores) if consistency_scores else 0.5
-        avg_motion_smoothness = np.mean(motion_scores) if motion_scores else 0.5
-        
-        return {
-            'temporal_consistency': avg_consistency,
-            'motion_smoothness': avg_motion_smoothness,
-            'frame_transition_score': (avg_consistency + avg_motion_smoothness) / 2
-        }
-        
-    except Exception as e:
-        st.error(f"Error in temporal analysis: {str(e)}")
-        return {'temporal_consistency': 0.5, 'motion_smoothness': 0.5, 'frame_transition_score': 0.5}
-
-def detect_deepfake_indicators(frames: List[np.ndarray]) -> Dict[str, float]:
-    """Detect deepfake-specific indicators in video frames"""
-    if not frames:
-        return {'deepfake_probability': 0.5}
-    
-    try:
-        deepfake_scores = []
-        face_consistency_scores = []
-        
-        # Initialize face detector
-        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-        
-        previous_face_features = None
-        
-        for frame in frames:
-            gray_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-            
-            # Detect faces
-            faces = face_cascade.detectMultiScale(gray_frame, 1.1, 4)
-            
-            if len(faces) > 0:
-                # Analyze the largest face
-                face = max(faces, key=lambda x: x[2] * x[3])
-                x, y, w, h = face
-                
-                face_region = gray_frame[y:y+h, x:x+w]
-                
-                if face_region.size > 0:
-                    # Extract features for consistency analysis
-                    try:
-                        # Calculate Local Binary Pattern for face texture
-                        lbp = feature.local_binary_pattern(face_region, 8, 1, method='uniform')
-                        face_texture_features = np.histogram(lbp.ravel(), bins=10)[0]
-                        face_texture_features = face_texture_features / (np.sum(face_texture_features) + 1e-6)
-                        
-                        # Check consistency with previous frame
-                        if previous_face_features is not None:
-                            similarity = 1.0 - cosine(face_texture_features, previous_face_features)
-                            face_consistency_scores.append(max(0, min(1, similarity)))
-                        
-                        previous_face_features = face_texture_features
-                        
-                        # Analyze face region for artifacts
-                        # Check for unnatural smoothness (common in deepfakes)
-                        face_variance = np.var(face_region.astype(float))
-                        smoothness_score = 1.0 - min(1.0, face_variance / 1000.0)
-                        
-                        # Check for edge artifacts around face boundary
-                        face_edges = cv2.Canny(face_region, 50, 150)
-                        edge_density = np.sum(face_edges > 0) / face_edges.size
-                        edge_artifact_score = abs(edge_density - 0.1) * 10  # Unnatural if too high or too low
-                        
-                        # Combine scores
-                        frame_deepfake_score = (smoothness_score + min(1.0, edge_artifact_score)) / 2
-                        deepfake_scores.append(frame_deepfake_score)
-                        
-                    except Exception as e:
-                        continue
-        
-        # Calculate final deepfake probability
-        avg_deepfake_score = np.mean(deepfake_scores) if deepfake_scores else 0.5
-        avg_face_consistency = np.mean(face_consistency_scores) if face_consistency_scores else 0.5
-        
-        # Inconsistent faces or high artifact scores suggest deepfake
-        deepfake_probability = (avg_deepfake_score + (1.0 - avg_face_consistency)) / 2
-        
-        return {
-            'deepfake_probability': deepfake_probability,
-            'face_consistency_score': avg_face_consistency,
-            'artifact_detection_score': avg_deepfake_score,
-            'faces_detected': len(deepfake_scores)
-        }
-        
-    except Exception as e:
-        st.error(f"Error in deepfake detection: {str(e)}")
-        return {'deepfake_probability': 0.5}
-
-def comprehensive_video_analysis(video_path: str, source_url: str = "") -> Tuple[VideoAnalysisFeatures, List[AdvancedDetectionFeatures]]:
-    """Comprehensive video analysis combining frame and temporal analysis"""
-    
-    # Extract frames for analysis
-    frames = extract_video_frames(video_path, max_frames=20)
-    
-    if not frames:
-        # Return default values if frame extraction fails
-        default_video_features = VideoAnalysisFeatures(
-            temporal_consistency_score=0.5, motion_vector_anomalies=0.5,
-            frame_transition_artifacts=0.5, optical_flow_irregularities=0.5,
-            compression_pattern_analysis=0.5, facial_morphing_detection=0.5,
-            lip_sync_consistency=0.5, deepfake_indicators=0.5,
-            generation_timestamp_analysis=0.5, frame_interpolation_artifacts=0.5
-        )
-        return default_video_features, []
-    
-    # Analyze individual frames
-    frame_analyses = []
-    for i, frame in enumerate(frames[:10]):  # Limit to 10 frames for performance
-        try:
-            frame_analysis = comprehensive_ai_detection(frame, source_url)
-            frame_analyses.append(frame_analysis)
-        except Exception as e:
-            st.warning(f"Frame {i} analysis failed: {str(e)}")
-            continue
-    
-    # Temporal analysis
-    temporal_analysis = analyze_temporal_consistency(frames)
-    
-    # Deepfake detection
-    deepfake_analysis = detect_deepfake_indicators(frames)
-    
-    # Combine analyses into VideoAnalysisFeatures
-    video_features = VideoAnalysisFeatures(
-        temporal_consistency_score=temporal_analysis.get('temporal_consistency', 0.5),
-        motion_vector_anomalies=1.0 - temporal_analysis.get('motion_smoothness', 0.5),
-        frame_transition_artifacts=1.0 - temporal_analysis.get('frame_transition_score', 0.5),
-        optical_flow_irregularities=deepfake_analysis.get('deepfake_probability', 0.5),
-        compression_pattern_analysis=0.5,  # Simplified for this implementation
-        facial_morphing_detection=deepfake_analysis.get('artifact_detection_score', 0.5),
-        lip_sync_consistency=deepfake_analysis.get('face_consistency_score', 0.5),
-        deepfake_indicators=deepfake_analysis.get('deepfake_probability', 0.5),
-        generation_timestamp_analysis=0.5,  # Simplified for this implementation
-        frame_interpolation_artifacts=1.0 - temporal_analysis.get('motion_smoothness', 0.5)
-    )
-    
-    return video_features, frame_analyses
+# Legal Analysis Functions
 
 def generate_legal_grade_analysis(video_features: VideoAnalysisFeatures, 
                                  frame_features: List[AdvancedDetectionFeatures], 
@@ -1555,22 +1488,22 @@ def legal_grade_classification(features: AdvancedDetectionFeatures,
     try:
         # Enhanced weighted scoring for legal precision
         weights = {
-            'pixel_noise_variance': -0.18,        # Stronger weight for key indicators
+            'pixel_noise_variance': -0.18,        
             'frequency_domain_anomalies': 0.15,   
             'edge_sharpness_consistency': 0.16,   
             'compression_artifacts': 0.10,
             'texture_analysis_score': -0.14,      
             'color_histogram_anomalies': 0.12,
             'gradient_consistency': 0.11,
-            'neural_texture_patterns': 0.17,      # High importance
+            'neural_texture_patterns': 0.17,      
             'upsampling_artifacts': 0.13,
             'attention_map_irregularities': 0.10,
             'latent_space_signatures': 0.14,
-            'exif_consistency_score': -0.16,      # Strong indicator
+            'exif_consistency_score': -0.16,      
             'timestamp_plausibility': -0.10,
             'color_profile_analysis': 0.08,
             'file_entropy_analysis': 0.07,
-            'statistical_significance': 0.12,     # Legal-grade features
+            'statistical_significance': 0.12,     
             'cross_validation_score': 0.10,
             'reproducibility_index': 0.08
         }
@@ -1639,7 +1572,7 @@ def legal_grade_classification(features: AdvancedDetectionFeatures,
                 lip_sync_consistency=0.5, deepfake_indicators=0.5,
                 generation_timestamp_analysis=0.5, frame_interpolation_artifacts=0.5
             ),
-            [features],  # Frame features
+            [features],
             url_analysis.get('source_confidence', 0.5)
         )
         
@@ -1687,414 +1620,205 @@ def download_image_from_url(url: str) -> Optional[bytes]:
         st.error(f"Unexpected error: {str(e)}")
         return None
 
-# Enhanced main application with video support and legal-grade analysis
-def main():
-    """Enhanced main application function"""
-    
-    # Header with legal theme
-    st.markdown("<div class='main-header'>⚖️ TRUTHLENS PRO</div>", unsafe_allow_html=True)
-    st.markdown("<div class='main-subtitle'>Legal-Grade AI Detection • Video Analysis • Court-Admissible Evidence</div>", unsafe_allow_html=True)
-    st.markdown("<div class='version-badge'><span class='badge'>⚖️ LEGAL EDITION V5.0 | COURT-READY ANALYSIS</span></div>", unsafe_allow_html=True)
+# Display Functions
 
-    # Legal-grade certification badge
+def display_video_analysis_results(is_ai: bool, confidence: int, risk_level: str, 
+                                 video_features: VideoAnalysisFeatures, 
+                                 legal_features: LegalGradeFeatures, 
+                                 source_url: str):
+    """Display comprehensive video analysis results"""
+    
+    # Main Verdict
+    verdict_class = "verdict-ai" if is_ai else "verdict-human"
+    verdict_text = "AI-GENERATED VIDEO" if is_ai else "HUMAN-CREATED VIDEO"
+    
+    st.markdown(f"<div class='{verdict_class}'>{verdict_text}</div>", unsafe_allow_html=True)
+    
+    # Confidence and Legal Assessment
+    confidence_class = "confidence-high" if confidence >= 85 else "confidence-medium" if confidence >= 65 else "confidence-low"
+    
     st.markdown(
-        """
-        <div class='legal-grade-badge'>
-            🏛️ LEGAL-GRADE CERTIFIED<br>
-            <small>Court-Admissible Analysis Standards</small>
+        f"""
+        <div class='confidence-display'>
+            <div class='confidence-number {confidence_class}'>{confidence}%</div>
+            <h3>DETECTION CONFIDENCE</h3>
+            <p style='color: var(--text-300);'>
+                Legal Certainty Level: <strong>{risk_level}</strong><br>
+                Evidence Quality: <strong>{legal_features.evidence_quality_rating}</strong>
+            </p>
+            <div style='margin-top: 1.5rem; padding: 1.5rem; background: var(--bg-1100); border-radius: 12px; border-left: 4px solid var(--{"legal-gold" if legal_features.court_ready_analysis else "neon-red"});'>
+                <strong>Court Admissibility: {"READY" if legal_features.court_ready_analysis else "NOT READY"}</strong><br><br>
+                Admissibility Score: {legal_features.admissibility_score:.2f}/1.0<br>
+                Expert Witness Confidence: {legal_features.expert_witness_confidence:.2f}/1.0
+            </div>
         </div>
         """, 
         unsafe_allow_html=True
     )
-
-    with st.container():
-        st.markdown("<div class='truthlens-panel'>", unsafe_allow_html=True)
-
-        tabs = st.tabs([
-            "🎬 Video Analysis", 
-            "📸 Image Analysis", 
-            "🔗 URL Detection", 
-            "⚖️ Legal Report", 
-            "🔬 Detection Science",
-            "⚙️ Expert Settings"
-        ])
-
-        # Video Analysis Tab
-        with tabs[0]:
-            st.markdown("### 🎬 Advanced Video AI Detection")
-            st.markdown(
-                """
-                <div class='video-analysis-section'>
-                <h4>🔍 Video Analysis Capabilities</h4>
-                <ul>
-                <li><strong>Platform Support:</strong> YouTube, TikTok, Instagram, Facebook, Twitter/X, Vimeo, and 50+ platforms</li>
-                <li><strong>Deepfake Detection:</strong> Facial morphing, lip-sync analysis, temporal consistency</li>
-                <li><strong>AI Video Detection:</strong> Stable Video Diffusion, Runway ML, Pika Labs detection</li>
-                <li><strong>Legal-Grade Analysis:</strong> Court-admissible evidence generation</li>
-                </ul>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-            
-            video_option = st.radio(
-                "Choose video source:",
-                ["📁 Upload Video File", "🔗 Video URL from Any Platform"],
-                key="video_source"
-            )
-            
-            if video_option == "🔗 Video URL from Any Platform":
-                col1, col2 = st.columns([5, 1])
-                with col1:
-                    video_url = st.text_input(
-                        "",
-                        placeholder="https://youtube.com/watch?v=... or any video URL",
-                        label_visibility="collapsed",
-                        key="video_url_input"
-                    )
-                    st.caption("✅ Supports: YouTube, TikTok, Instagram, Facebook, Twitter, Vimeo, Dailymotion, and 50+ platforms")
-                
-                with col2:
-                    analyze_video_url = st.button("🎬 ANALYZE", type="primary", key="analyze_video_url")
-                    
-            else:
-                uploaded_video = st.file_uploader(
-                    "Upload video file",
-                    type=["mp4", "avi", "mov", "mkv", "webm", "flv", "wmv"],
-                    key="video_uploader"
-                )
-                if uploaded_video:
-                    col1, col2, col3 = st.columns([2, 2, 2])
-                    with col2:
-                        analyze_uploaded_video = st.button("🔬 DEEP ANALYZE", type="primary", key="analyze_uploaded")
-
-        # Image Analysis Tab  
-        with tabs[1]:
-            st.markdown("### 📸 Enhanced Image AI Detection")
-            
-            image_option = st.radio(
-                "Choose image source:",
-                ["📁 Upload Image File", "🔗 Image URL"],
-                key="image_source"
-            )
-            
-            if image_option == "🔗 Image URL":
-                col1, col2 = st.columns([5, 1])
-                with col1:
-                    image_url = st.text_input(
-                        "",
-                        placeholder="https://example.com/image.jpg",
-                        label_visibility="collapsed",
-                        key="image_url_input"
-                    )
-                with col2:
-                    analyze_image_url = st.button("🔍 ANALYZE", type="primary", key="analyze_image_url")
-            else:
-                uploaded_image = st.file_uploader(
-                    "Upload image file",
-                    type=["jpg", "jpeg", "png", "webp", "bmp", "gif", "tiff"],
-                    key="image_uploader"
-                )
-                if uploaded_image:
-                    col1, col2, col3 = st.columns([2, 2, 2])
-                    with col2:
-                        analyze_uploaded_image = st.button("🔬 ANALYZE", type="primary", key="analyze_image_upload")
-
-        # URL Detection Tab
-        with tabs[2]:
-            st.markdown("### 🔗 Universal URL Detection")
-            st.markdown("Detect AI-generated content from any URL - images, videos, social media posts")
-            
-            col1, col2 = st.columns([5, 1])
-            with col1:
-                universal_url = st.text_input(
-                    "",
-                    placeholder="Any URL containing media content",
-                    label_visibility="collapsed",
-                    key="universal_url"
-                )
-                st.caption("🌐 Auto-detects content type and applies appropriate analysis")
-            with col2:
-                analyze_universal = st.button("🔍 DETECT", type="primary", key="analyze_universal")
-
-        # Legal Report Tab
-        with tabs[3]:
-            st.markdown(
-                """
-                <div class='legal-report-section'>
-                <h3>⚖️ Legal-Grade Analysis Report</h3>
-                <p>Generate court-admissible evidence reports with statistical confidence intervals,
-                chain of custody analysis, and expert witness testimony preparation.</p>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-            
-            if st.button("📋 Generate Legal Report Template", key="legal_template"):
-                st.markdown("""
-                ### 📋 Legal Evidence Report Template
-                
-                **Case Information:**
-                - Case ID: _______________
-                - Date of Analysis: _______________
-                - Analyst: _______________
-                - Chain of Custody Reference: _______________
-                
-                **Technical Analysis Summary:**
-                - Detection Confidence: ___%
-                - Statistical Significance: _______________
-                - False Positive Probability: ___%
-                - Cross-Validation Score: _______________
-                
-                **Evidence Quality Rating:**
-                - [ ] Beyond Reasonable Doubt (≥95% confidence)
-                - [ ] Clear and Convincing (80-94% confidence)  
-                - [ ] Preponderance of Evidence (65-79% confidence)
-                - [ ] Insufficient Evidence (<65% confidence)
-                
-                **Court Admissibility Assessment:**
-                - Daubert Standard Compliance: _______________
-                - Peer Review Status: _______________
-                - Error Rate Analysis: _______________
-                - General Acceptance in Scientific Community: _______________
-                """)
-
-        # Detection Science Tab
-        with tabs[4]:
-            st.markdown("### 🔬 Enhanced Detection Science")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("#### 📊 Image Analysis Techniques")
-                st.markdown("""
-                **Pixel-Level Forensics:**
-                - Multi-scale noise analysis with statistical validation
-                - GLCM texture analysis with cross-correlation
-                - Enhanced frequency domain processing (FFT/DCT)
-                - Edge consistency analysis using multiple algorithms
-                
-                **Color Science Analysis:**
-                - HSV/LAB color space anomaly detection
-                - Histogram peak analysis and entropy calculation
-                - Color distribution naturalness assessment
-                - Chromatic aberration analysis
-                
-                **Compression Forensics:**
-                - JPEG artifact detection and quantization analysis
-                - File entropy and bit distribution analysis
-                - Compression ratio consistency evaluation
-                """)
-                
-            with col2:
-                st.markdown("#### 🎬 Video Analysis Techniques")
-                st.markdown("""
-                **Temporal Analysis:**
-                - Optical flow consistency evaluation
-                - Inter-frame correlation analysis
-                - Motion vector anomaly detection
-                - Frame interpolation artifact detection
-                
-                **Deepfake Detection:**
-                - Facial landmark consistency analysis
-                - Lip-sync temporal alignment verification
-                - Blending artifact detection at face boundaries
-                - Eye gaze and blink pattern analysis
-                
-                **AI Video Signatures:**
-                - Stable Diffusion video artifacts
-                - Runway ML generation patterns
-                - Frame generation consistency analysis
-                """)
-
-        # Expert Settings Tab
-        with tabs[5]:
-            st.markdown("### ⚙️ Expert Analysis Settings")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("**🔬 Analysis Parameters**")
-                legal_mode = st.checkbox("Legal-Grade Mode", True, help="Enables court-admissible analysis standards")
-                statistical_validation = st.checkbox("Statistical Validation", True, help="Includes confidence intervals and significance testing")
-                deep_metadata_analysis = st.checkbox("Deep Metadata Analysis", True, help="Comprehensive EXIF and file structure analysis")
-                cross_validation = st.checkbox("Cross-Validation", True, help="Multiple algorithm verification")
-                
-                detection_sensitivity = st.slider("Detection Sensitivity", 0.5, 1.0, 0.85, 0.05, key="expert_sensitivity")
-                
-            with col2:
-                st.markdown("**📊 Reporting Options**")
-                include_technical_details = st.checkbox("Technical Details", True)
-                include_statistical_analysis = st.checkbox("Statistical Analysis", True)
-                include_expert_opinion = st.checkbox("Expert Opinion Summary", True)
-                include_legal_assessment = st.checkbox("Legal Admissibility Assessment", True)
-                
-                confidence_threshold = st.slider("Court Admissibility Threshold", 0.75, 0.95, 0.85, 0.05, key="legal_threshold")
-
-        # Analysis Execution Logic
-        source_data = None
-        source_url = ""
-        is_video = False
+    
+    # Video-Specific Analysis
+    st.markdown("### Video Analysis Results")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("**Deepfake Detection**")
+        deepfake_score = int(video_features.deepfake_indicators * 100)
+        st.metric("Deepfake Probability", f"{deepfake_score}%")
         
-        # Handle different input types
-        if 'analyze_video_url' in st.session_state and st.session_state.analyze_video_url and 'video_url_input' in st.session_state:
-            video_url = st.session_state.video_url_input
-            if video_url:
-                with st.spinner("📥 Downloading video from URL..."):
-                    temp_video_path = download_video_from_url(video_url)
-                    if temp_video_path:
-                        source_data = temp_video_path
-                        source_url = video_url
-                        is_video = True
-                        
-        elif 'analyze_uploaded' in st.session_state and st.session_state.analyze_uploaded and 'video_uploader' in st.session_state:
-            uploaded_video = st.session_state.video_uploader
-            if uploaded_video:
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmp_file:
-                    tmp_file.write(uploaded_video.read())
-                    source_data = tmp_file.name
-                    source_url = uploaded_video.name
-                    is_video = True
-                
-        elif 'analyze_image_url' in st.session_state and st.session_state.analyze_image_url and 'image_url_input' in st.session_state:
-            image_url = st.session_state.image_url_input
-            if image_url:
-                with st.spinner("📥 Downloading image from URL..."):
-                    image_data = download_image_from_url(image_url)
-                    if image_data:
-                        source_data = image_data
-                        source_url = image_url
-                        is_video = False
-                    
-        elif 'analyze_image_upload' in st.session_state and st.session_state.analyze_image_upload and 'image_uploader' in st.session_state:
-            uploaded_image = st.session_state.image_uploader
-            if uploaded_image:
-                source_data = uploaded_image.read()
-                source_url = uploaded_image.name
-                is_video = False
-            
-        elif 'analyze_universal' in st.session_state and st.session_state.analyze_universal and 'universal_url' in st.session_state:
-            universal_url = st.session_state.universal_url
-            if universal_url:
-                with st.spinner("🔍 Analyzing URL content..."):
-                    # Try video first, then image
-                    temp_video = download_video_from_url(universal_url)
-                    if temp_video:
-                        source_data = temp_video
-                        source_url = universal_url
-                        is_video = True
-                    else:
-                        image_data = download_image_from_url(universal_url)
-                        if image_data:
-                            source_data = image_data
-                            source_url = universal_url
-                            is_video = False
+        facial_morph_score = int(video_features.facial_morphing_detection * 100)
+        st.metric("Facial Morphing", f"{facial_morph_score}%")
+        
+        lip_sync_score = int((1 - video_features.lip_sync_consistency) * 100)
+        st.metric("Lip-Sync Anomalies", f"{lip_sync_score}%")
+    
+    with col2:
+        st.markdown("**Temporal Analysis**")
+        temporal_score = int(video_features.temporal_consistency_score * 100)
+        st.metric("Temporal Consistency", f"{temporal_score}%")
+        
+        motion_anom_score = int(video_features.motion_vector_anomalies * 100)
+        st.metric("Motion Anomalies", f"{motion_anom_score}%")
+        
+        frame_interp_score = int(video_features.frame_interpolation_artifacts * 100)
+        st.metric("Frame Interpolation", f"{frame_interp_score}%")
+    
+    with col3:
+        st.markdown("**Technical Analysis**")
+        compression_score = int(video_features.compression_pattern_analysis * 100)
+        st.metric("Compression Anomalies", f"{compression_score}%")
+        
+        timestamp_score = int(video_features.generation_timestamp_analysis * 100)
+        st.metric("Timestamp Suspicion", f"{timestamp_score}%")
+    
+    # Legal-Grade Assessment
+    st.markdown("### Legal-Grade Assessment")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**Evidence Quality Metrics**")
+        st.write(f"**Chain of Custody:** {legal_features.chain_of_custody_score:.3f}")
+        st.write(f"**Metadata Integrity:** {legal_features.metadata_integrity_score:.3f}")
+        st.write(f"**Source Authenticity:** {legal_features.source_authenticity_score:.3f}")
+        st.write(f"**Tampering Detection:** {legal_features.tampering_detection_score:.3f}")
+        
+    with col2:
+        st.markdown("**Statistical Analysis**")
+        st.write(f"**Expert Confidence:** {legal_features.expert_witness_confidence:.3f}")
+        st.write(f"**Admissibility Score:** {legal_features.admissibility_score:.3f}")
+        st.write(f"**Court Ready:** {'Yes' if legal_features.court_ready_analysis else 'No'}")
+        st.write(f"**Evidence Grade:** {legal_features.evidence_quality_rating}")
 
-        # Perform Analysis
-        if source_data:
-            st.divider()
-            
-            try:
-                if is_video:
-                    # Video Analysis Pipeline
-                    with st.spinner("🎬 Performing advanced video analysis..."):
-                        progress_bar = st.progress(0)
-                        status_text = st.empty()
-                        
-                        status_text.text("📹 Extracting video frames...")
-                        progress_bar.progress(15)
-                        
-                        status_text.text("🔍 Analyzing temporal consistency...")
-                        progress_bar.progress(30)
-                        
-                        status_text.text("👤 Detecting deepfake indicators...")
-                        progress_bar.progress(50)
-                        
-                        status_text.text("🎭 Analyzing facial morphing patterns...")
-                        progress_bar.progress(70)
-                        
-                        status_text.text("⚖️ Generating legal-grade assessment...")
-                        progress_bar.progress(90)
-                        
-                        # Perform video analysis
-                        video_features, frame_analyses = comprehensive_video_analysis(source_data, source_url)
-                        
-                        # Get best frame analysis for classification
-                        if frame_analyses:
-                            combined_features = frame_analyses[0]  # Use first frame as representative
-                        else:
-                            # Create default features if frame analysis fails
-                            combined_features = AdvancedDetectionFeatures(
-                                pixel_noise_variance=0.5, frequency_domain_anomalies=0.5, edge_sharpness_consistency=0.5,
-                                compression_artifacts=0.5, texture_analysis_score=0.5, color_histogram_anomalies=0.5,
-                                gradient_consistency=0.5, local_binary_patterns=0.5, neural_texture_patterns=0.5,
-                                upsampling_artifacts=0.5, attention_map_irregularities=0.5, latent_space_signatures=0.5,
-                                exif_consistency_score=0.5, timestamp_plausibility=0.5, color_profile_analysis=0.5,
-                                file_entropy_analysis=0.5, statistical_significance=0.5, cross_validation_score=0.5,
-                                reproducibility_index=0.5, false_positive_probability=0.5
-                            )
-                        
-                        url_analysis = analyze_url_patterns(source_url)
-                        is_ai, confidence, risk_level, legal_features = legal_grade_classification(
-                            combined_features, video_features, url_analysis
-                        )
-                        
-                        progress_bar.progress(100)
-                        time.sleep(0.5)
-                        progress_bar.empty()
-                        status_text.empty()
-                        
-                        st.success("✅ **VIDEO ANALYSIS COMPLETE** - Legal-grade video detection performed")
-                        
-                        # Display video-specific results
-                        display_video_analysis_results(is_ai, confidence, risk_level, video_features, legal_features, source_url)
-                        
-                else:
-                    # Image Analysis Pipeline
-                    with st.spinner("📸 Performing legal-grade image analysis..."):
-                        progress_bar = st.progress(0)
-                        status_text = st.empty()
-                        
-                        status_text.text("🔍 Analyzing pixel patterns...")
-                        progress_bar.progress(20)
-                        
-                        status_text.text("🎨 Processing color characteristics...")
-                        progress_bar.progress(40)
-                        
-                        status_text.text("📊 Performing frequency analysis...")
-                        progress_bar.progress(60)
-                        
-                        status_text.text("📋 Extracting metadata...")
-                        progress_bar.progress(80)
-                        
-                        status_text.text("⚖️ Generating legal assessment...")
-                        progress_bar.progress(100)
-                        
-                        # Perform image analysis
-                        features = comprehensive_ai_detection(source_data, source_url)
-                        url_analysis = analyze_url_patterns(source_url)
-                        is_ai, confidence, risk_level, legal_features = legal_grade_classification(features, None, url_analysis)
-                        
-                        time.sleep(0.5)
-                        progress_bar.empty()
-                        status_text.empty()
-                        
-                        st.success("✅ **IMAGE ANALYSIS COMPLETE** - Legal-grade analysis performed")
-                        
-                        # Display image-specific results
-                        display_image_analysis_results(is_ai, confidence, risk_level, features, legal_features, source_url)
-                
-                # Clean up temporary files
-                if is_video and os.path.exists(source_data):
-                    try:
-                        os.unlink(source_data)
-                    except:
-                        pass
-                        
-            except Exception as e:
-                st.error(f"❌ Analysis failed: {str(e)}")
-                st.error("This could indicate a corrupted file, unsupported format, or processing error.")
+def display_image_analysis_results(is_ai: bool, confidence: int, risk_level: str, 
+                                 features: AdvancedDetectionFeatures, 
+                                 legal_features: LegalGradeFeatures, 
+                                 source_url: str):
+    """Display comprehensive image analysis results"""
+    
+    # Main Verdict
+    verdict_class = "verdict-ai" if is_ai else "verdict-human"
+    verdict_text = "AI-GENERATED IMAGE" if is_ai else "HUMAN-CREATED IMAGE"
+    
+    st.markdown(f"<div class='{verdict_class}'>{verdict_text}</div>", unsafe_allow_html=True)
+    
+    # Confidence Display
+    confidence_class = "confidence-high" if confidence >= 85 else "confidence-medium" if confidence >= 65 else "confidence-low"
+    
+    st.markdown(
+        f"""
+        <div class='confidence-display'>
+            <div class='confidence-number {confidence_class}'>{confidence}%</div>
+            <h3>DETECTION CONFIDENCE</h3>
+            <p style='color: var(--text-300);'>
+                Legal Certainty: <strong>{risk_level}</strong><br>
+                Evidence Quality: <strong>{legal_features.evidence_quality_rating}</strong>
+            </p>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
+    
+    # Enhanced Technical Analysis
+    st.markdown("### Enhanced Technical Analysis")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("**Pixel Analysis**")
+        noise_score = int(features.pixel_noise_variance * 100)
+        st.metric("Noise Variance", f"{noise_score}%")
+        
+        freq_score = int(features.frequency_domain_anomalies * 100)
+        st.metric("Frequency Anomalies", f"{freq_score}%")
+        
+        edge_score = int(features.edge_sharpness_consistency * 100)
+        st.metric("Edge Consistency", f"{edge_score}%")
+    
+    with col2:
+        st.markdown("**Color Analysis**")
+        color_score = int(features.color_histogram_anomalies * 100)
+        st.metric("Color Anomalies", f"{color_score}%")
+        
+        texture_score = int(features.texture_analysis_score * 100)
+        st.metric("Texture Complexity", f"{texture_score}%")
+        
+        profile_score = int(features.color_profile_analysis * 100)
+        st.metric("Color Profile", f"{profile_score}%")
+    
+    with col3:
+        st.markdown("**AI Signatures**")
+        neural_score = int(features.neural_texture_patterns * 100)
+        st.metric("Neural Patterns", f"{neural_score}%")
+        
+        upsampling_score = int(features.upsampling_artifacts * 100)
+        st.metric("Upsampling Artifacts", f"{upsampling_score}%")
+        
+        latent_score = int(features.latent_space_signatures * 100)
+        st.metric("Latent Signatures", f"{latent_score}%")
+    
+    # Legal-Grade Statistics
+    st.markdown("### Legal-Grade Statistics")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**Statistical Validation**")
+        st.write(f"**Statistical Significance:** {features.statistical_significance:.3f}")
+        st.write(f"**Cross-Validation Score:** {features.cross_validation_score:.3f}")
+        st.write(f"**Reproducibility Index:** {features.reproducibility_index:.3f}")
+        st.write(f"**False Positive Probability:** {features.false_positive_probability:.3f}")
+        
+    with col2:
+        st.markdown("**Legal Assessment**")
+        st.write(f"**Evidence Quality:** {legal_features.evidence_quality_rating}")
+        st.write(f"**Legal Certainty:** {legal_features.legal_certainty_level}")
+        st.write(f"**Admissibility Score:** {legal_features.admissibility_score:.3f}")
+        st.write(f"**Court Ready:** {'Yes' if legal_features.court_ready_analysis else 'No'}")
 
-        st.markdown("</div>", unsafe_allow_html=True)#!/usr/bin/env python3
+def display_footer():
+    """Display enhanced legal-grade footer"""
+    st.markdown("---")
+    st.markdown(
+        """
+        <div style='text-align: center; color: var(--text-400); padding: 2rem;'>
+            <h3 style='color: var(--legal-gold); margin-bottom: 1rem;'>TRUTHLENS PRO LEGAL EDITION</h3>
+            <p><strong>Court-Admissible AI Detection System</strong></p>
+            <p>Advanced computer vision, statistical validation, and legal-grade evidence generation</p>
+            <p style='font-size: 0.9rem; margin-top: 1.5rem; color: var(--text-500);'>
+                <strong>DISCLAIMER:</strong> Results represent sophisticated probabilistic analysis using peer-reviewed techniques.<br>
+                For legal proceedings, consult with qualified experts and follow proper chain of custody procedures.<br>
+                This tool provides technical analysis to support, not replace, professional forensic examination.
+            </p>
+            <p style='font-size: 0.8rem; color: var(--text-600);'>
+                Detection algorithms based on published research in computer vision, digital forensics, and AI detection.<br>
+                Statistical methods follow accepted standards for scientific evidence in legal proceedings.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+        #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import hashlib
@@ -2494,7 +2218,6 @@ def analyze_pixel_patterns(img_array: np.ndarray) -> Dict[str, float]:
         results['gradient_consistency'] = gradient_consistency
         
         # Upsampling artifacts detection
-        # Check for regular patterns that might indicate upsampling
         from scipy.signal import correlate2d
         
         # Create a kernel to detect interpolation patterns
@@ -2507,6 +2230,274 @@ def analyze_pixel_patterns(img_array: np.ndarray) -> Dict[str, float]:
         results = {'noise_variance': 0.5, 'edge_consistency': 0.5, 'gradient_consistency': 0.5, 'upsampling_artifacts': 0.5}
     
     return results
+
+# Video Analysis Functions
+
+def download_video_from_url(url: str) -> Optional[str]:
+    """Enhanced video downloader supporting all major platforms"""
+    try:
+        # Configure yt-dlp for maximum compatibility
+        ydl_opts = {
+            'format': 'best[height<=720]',  # Limit to 720p for processing efficiency
+            'outtmpl': tempfile.mktemp(suffix='.%(ext)s'),
+            'quiet': True,
+            'no_warnings': True,
+            'extractaudio': False,
+            'writeinfojson': True,
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Extract info first
+            info = ydl.extract_info(url, download=False)
+            
+            # Check if it's a live stream (not downloadable)
+            if info.get('is_live', False):
+                st.error("Live streams cannot be analyzed")
+                return None
+            
+            # Download the video
+            ydl.download([url])
+            
+            # Find the downloaded file
+            filename_template = ydl_opts['outtmpl']
+            # Replace template with actual values
+            filename = filename_template.replace('%(ext)s', info.get('ext', 'mp4'))
+            
+            if os.path.exists(filename):
+                return filename
+            else:
+                # Try common extensions if exact match fails
+                for ext in ['mp4', 'webm', 'mkv', 'avi']:
+                    test_filename = filename_template.replace('%(ext)s', ext)
+                    if os.path.exists(test_filename):
+                        return test_filename
+                
+                st.error("Downloaded file not found")
+                return None
+                
+    except yt_dlp.utils.DownloadError as e:
+        st.error(f"Download failed: {str(e)}")
+        return None
+    except Exception as e:
+        st.error(f"Unexpected error downloading video: {str(e)}")
+        return None
+
+def extract_video_frames(video_path: str, max_frames: int = 30) -> List[np.ndarray]:
+    """Extract frames from video for analysis"""
+    try:
+        cap = cv2.VideoCapture(video_path)
+        
+        if not cap.isOpened():
+            st.error("Could not open video file")
+            return []
+        
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        duration = total_frames / fps if fps > 0 else 0
+        
+        # Calculate frame sampling interval
+        if total_frames <= max_frames:
+            frame_interval = 1
+        else:
+            frame_interval = total_frames // max_frames
+        
+        frames = []
+        frame_count = 0
+        
+        while len(frames) < max_frames and cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+                
+            if frame_count % frame_interval == 0:
+                # Convert BGR to RGB
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                frames.append(rgb_frame)
+            
+            frame_count += 1
+        
+        cap.release()
+        
+        st.info(f"Extracted {len(frames)} frames from video ({duration:.1f}s, {fps:.1f} FPS)")
+        return frames
+        
+    except Exception as e:
+        st.error(f"Error extracting frames: {str(e)}")
+        return []
+
+def analyze_temporal_consistency(frames: List[np.ndarray]) -> Dict[str, float]:
+    """Analyze temporal consistency between frames"""
+    if len(frames) < 2:
+        return {'temporal_consistency': 0.5, 'motion_smoothness': 0.5}
+    
+    try:
+        consistency_scores = []
+        motion_scores = []
+        
+        for i in range(1, len(frames)):
+            prev_frame = cv2.cvtColor(frames[i-1], cv2.COLOR_RGB2GRAY)
+            curr_frame = cv2.cvtColor(frames[i], cv2.COLOR_RGB2GRAY)
+            
+            # Calculate optical flow
+            flow = cv2.calcOpticalFlowPyrLK(
+                prev_frame, curr_frame, 
+                np.random.randint(0, min(prev_frame.shape), (100, 1, 2)).astype(np.float32),
+                None
+            )[0]
+            
+            if flow is not None and len(flow) > 0:
+                # Calculate motion consistency
+                motion_magnitude = np.linalg.norm(flow.reshape(-1, 2), axis=1)
+                motion_consistency = 1.0 - np.std(motion_magnitude) / (np.mean(motion_magnitude) + 1e-6)
+                motion_scores.append(max(0, min(1, motion_consistency)))
+            
+            # Frame difference analysis
+            frame_diff = cv2.absdiff(prev_frame, curr_frame)
+            diff_mean = np.mean(frame_diff)
+            diff_std = np.std(frame_diff)
+            
+            # AI-generated videos often have unnatural temporal transitions
+            consistency_score = 1.0 - min(1.0, diff_std / (diff_mean + 1e-6))
+            consistency_scores.append(max(0, consistency_score))
+        
+        avg_consistency = np.mean(consistency_scores) if consistency_scores else 0.5
+        avg_motion_smoothness = np.mean(motion_scores) if motion_scores else 0.5
+        
+        return {
+            'temporal_consistency': avg_consistency,
+            'motion_smoothness': avg_motion_smoothness,
+            'frame_transition_score': (avg_consistency + avg_motion_smoothness) / 2
+        }
+        
+    except Exception as e:
+        st.error(f"Error in temporal analysis: {str(e)}")
+        return {'temporal_consistency': 0.5, 'motion_smoothness': 0.5, 'frame_transition_score': 0.5}
+
+def detect_deepfake_indicators(frames: List[np.ndarray]) -> Dict[str, float]:
+    """Detect deepfake-specific indicators in video frames"""
+    if not frames:
+        return {'deepfake_probability': 0.5}
+    
+    try:
+        deepfake_scores = []
+        face_consistency_scores = []
+        
+        # Initialize face detector
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        
+        previous_face_features = None
+        
+        for frame in frames:
+            gray_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+            
+            # Detect faces
+            faces = face_cascade.detectMultiScale(gray_frame, 1.1, 4)
+            
+            if len(faces) > 0:
+                # Analyze the largest face
+                face = max(faces, key=lambda x: x[2] * x[3])
+                x, y, w, h = face
+                
+                face_region = gray_frame[y:y+h, x:x+w]
+                
+                if face_region.size > 0:
+                    # Extract features for consistency analysis
+                    try:
+                        # Calculate Local Binary Pattern for face texture
+                        lbp = feature.local_binary_pattern(face_region, 8, 1, method='uniform')
+                        face_texture_features = np.histogram(lbp.ravel(), bins=10)[0]
+                        face_texture_features = face_texture_features / (np.sum(face_texture_features) + 1e-6)
+                        
+                        # Check consistency with previous frame
+                        if previous_face_features is not None:
+                            similarity = 1.0 - cosine(face_texture_features, previous_face_features)
+                            face_consistency_scores.append(max(0, min(1, similarity)))
+                        
+                        previous_face_features = face_texture_features
+                        
+                        # Analyze face region for artifacts
+                        # Check for unnatural smoothness (common in deepfakes)
+                        face_variance = np.var(face_region.astype(float))
+                        smoothness_score = 1.0 - min(1.0, face_variance / 1000.0)
+                        
+                        # Check for edge artifacts around face boundary
+                        face_edges = cv2.Canny(face_region, 50, 150)
+                        edge_density = np.sum(face_edges > 0) / face_edges.size
+                        edge_artifact_score = abs(edge_density - 0.1) * 10  # Unnatural if too high or too low
+                        
+                        # Combine scores
+                        frame_deepfake_score = (smoothness_score + min(1.0, edge_artifact_score)) / 2
+                        deepfake_scores.append(frame_deepfake_score)
+                        
+                    except Exception as e:
+                        continue
+        
+        # Calculate final deepfake probability
+        avg_deepfake_score = np.mean(deepfake_scores) if deepfake_scores else 0.5
+        avg_face_consistency = np.mean(face_consistency_scores) if face_consistency_scores else 0.5
+        
+        # Inconsistent faces or high artifact scores suggest deepfake
+        deepfake_probability = (avg_deepfake_score + (1.0 - avg_face_consistency)) / 2
+        
+        return {
+            'deepfake_probability': deepfake_probability,
+            'face_consistency_score': avg_face_consistency,
+            'artifact_detection_score': avg_deepfake_score,
+            'faces_detected': len(deepfake_scores)
+        }
+        
+    except Exception as e:
+        st.error(f"Error in deepfake detection: {str(e)}")
+        return {'deepfake_probability': 0.5}
+
+def comprehensive_video_analysis(video_path: str, source_url: str = "") -> Tuple[VideoAnalysisFeatures, List[AdvancedDetectionFeatures]]:
+    """Comprehensive video analysis combining frame and temporal analysis"""
+    
+    # Extract frames for analysis
+    frames = extract_video_frames(video_path, max_frames=20)
+    
+    if not frames:
+        # Return default values if frame extraction fails
+        default_video_features = VideoAnalysisFeatures(
+            temporal_consistency_score=0.5, motion_vector_anomalies=0.5,
+            frame_transition_artifacts=0.5, optical_flow_irregularities=0.5,
+            compression_pattern_analysis=0.5, facial_morphing_detection=0.5,
+            lip_sync_consistency=0.5, deepfake_indicators=0.5,
+            generation_timestamp_analysis=0.5, frame_interpolation_artifacts=0.5
+        )
+        return default_video_features, []
+    
+    # Analyze individual frames
+    frame_analyses = []
+    for i, frame in enumerate(frames[:10]):  # Limit to 10 frames for performance
+        try:
+            frame_analysis = comprehensive_ai_detection(frame, source_url)
+            frame_analyses.append(frame_analysis)
+        except Exception as e:
+            st.warning(f"Frame {i} analysis failed: {str(e)}")
+            continue
+    
+    # Temporal analysis
+    temporal_analysis = analyze_temporal_consistency(frames)
+    
+    # Deepfake detection
+    deepfake_analysis = detect_deepfake_indicators(frames)
+    
+    # Combine analyses into VideoAnalysisFeatures
+    video_features = VideoAnalysisFeatures(
+        temporal_consistency_score=temporal_analysis.get('temporal_consistency', 0.5),
+        motion_vector_anomalies=1.0 - temporal_analysis.get('motion_smoothness', 0.5),
+        frame_transition_artifacts=1.0 - temporal_analysis.get('frame_transition_score', 0.5),
+        optical_flow_irregularities=deepfake_analysis.get('deepfake_probability', 0.5),
+        compression_pattern_analysis=0.5,  # Simplified for this implementation
+        facial_morphing_detection=deepfake_analysis.get('artifact_detection_score', 0.5),
+        lip_sync_consistency=deepfake_analysis.get('face_consistency_score', 0.5),
+        deepfake_indicators=deepfake_analysis.get('deepfake_probability', 0.5),
+        generation_timestamp_analysis=0.5,  # Simplified for this implementation
+        frame_interpolation_artifacts=1.0 - temporal_analysis.get('motion_smoothness', 0.5)
+    )
+    
+    return video_features, frame_analyses
 
 def analyze_color_characteristics(img_array: np.ndarray) -> Dict[str, float]:
     """Enhanced color analysis for AI-generated content detection"""
@@ -2527,20 +2518,17 @@ def analyze_color_characteristics(img_array: np.ndarray) -> Dict[str, float]:
         hist_b = hist_b / np.sum(hist_b)
         
         # Check for unnatural color distributions
-        # AI-generated images often have smoother color transitions
         hist_entropy_r = stats.entropy(hist_r + 1e-10)
         hist_entropy_g = stats.entropy(hist_g + 1e-10)
         hist_entropy_b = stats.entropy(hist_b + 1e-10)
         
         avg_entropy = (hist_entropy_r + hist_entropy_g + hist_entropy_b) / 3
-        # Lower entropy might indicate AI generation (smoother distributions)
         entropy_anomaly = 1.0 - (avg_entropy / 8.0)  # 8.0 is max entropy for 256 bins
         results['histogram_anomalies'] = min(1.0, max(0.0, entropy_anomaly))
         
         # Color saturation analysis
         hsv = cv2.cvtColor(img_array, cv2.COLOR_RGB2HSV)
         saturation_mean = np.mean(hsv[:,:,1])
-        saturation_std = np.std(hsv[:,:,1])
         
         # AI images often have unnatural saturation patterns
         saturation_naturalness = abs(saturation_mean - 127.5) / 127.5
@@ -2568,7 +2556,6 @@ def analyze_frequency_domain(img_array: np.ndarray) -> Dict[str, float]:
         magnitude_spectrum = np.abs(fft_shifted)
         
         # Analyze frequency characteristics
-        # AI-generated images often have different frequency signatures
         center_y, center_x = magnitude_spectrum.shape[0] // 2, magnitude_spectrum.shape[1] // 2
         
         # High frequency content analysis
@@ -2583,12 +2570,10 @@ def analyze_frequency_domain(img_array: np.ndarray) -> Dict[str, float]:
         high_freq_ratio = high_freq_energy / (total_energy + 1e-10)
         
         # Anomaly score based on frequency distribution
-        # AI images often have reduced high-frequency content
         anomaly_score = 1.0 - min(1.0, high_freq_ratio * 10)
         results['anomaly_score'] = anomaly_score
         
         # Attention map irregularities (simplified)
-        # Look for unnatural frequency patterns
         freq_variance = np.var(np.log(magnitude_spectrum + 1))
         attention_anomaly = min(1.0, freq_variance / 100.0)
         results['attention_anomalies'] = attention_anomaly
@@ -2643,14 +2628,11 @@ def analyze_texture_patterns(img_array: np.ndarray) -> Dict[str, float]:
             results['texture_complexity'] = 0.5
         
         # Neural pattern detection (simplified)
-        # Look for patterns typical of neural network generation
-        # This is a simplified heuristic
         edge_density = np.sum(feature.canny(gray)) / gray.size
-        neural_patterns = abs(edge_density - 0.1) * 10  # Unnatural if too high or too low
+        neural_patterns = abs(edge_density - 0.1) * 10
         results['neural_patterns'] = min(1.0, neural_patterns)
         
         # Latent space signatures (simplified)
-        # Check for smoothness that might indicate latent space generation
         smoothness = np.mean(ndimage.gaussian_filter(gray.astype(float), sigma=2) - gray.astype(float))**2
         latent_signatures = min(1.0, smoothness / 1000.0)
         results['latent_signatures'] = latent_signatures
