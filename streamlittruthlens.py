@@ -997,6 +997,10 @@
 
 
 
+
+
+
+
 )
 
 # Main Application
@@ -1249,7 +1253,7 @@ def main():
         is_video = False
         
         # Handle different input types
-        if 'analyze_video_url' in locals() and video_option == "Video URL from Any Platform" and video_url:
+        if video_option == "Video URL from Any Platform" and 'analyze_video_url' in locals() and video_url:
             with st.spinner("Downloading video from URL..."):
                 temp_video_path = download_video_from_url(video_url)
                 if temp_video_path:
@@ -1264,7 +1268,7 @@ def main():
                 source_url = uploaded_video.name
                 is_video = True
                 
-        elif 'analyze_image_url' in locals() and image_option == "Image URL" and image_url:
+        elif image_option == "Image URL" and 'analyze_image_url' in locals() and image_url:
             with st.spinner("Downloading image from URL..."):
                 image_data = download_image_from_url(image_url)
                 if image_data:
@@ -1406,419 +1410,7 @@ if __name__ == "__main__":
         display_footer()
     except Exception as e:
         st.error(f"Application error: {str(e)}")
-        st.error("Please refresh the page and try again.")    return video_features, frame_analyses
-
-# Legal Analysis Functions
-
-def generate_legal_grade_analysis(video_features: VideoAnalysisFeatures, 
-                                 frame_features: List[AdvancedDetectionFeatures], 
-                                 source_confidence: float) -> LegalGradeFeatures:
-    """Generate legal-grade analysis for court admissibility"""
-    
-    # Calculate chain of custody score
-    chain_of_custody = source_confidence * 0.8
-    
-    # Forensic hash verification (simplified)
-    forensic_hash = 0.9  # Would be calculated from actual hash verification
-    
-    # Metadata integrity
-    if frame_features:
-        metadata_integrity = np.mean([f.exif_consistency_score for f in frame_features])
-    else:
-        metadata_integrity = 0.5
-    
-    # Source authenticity
-    source_authenticity = source_confidence
-    
-    # Tampering detection
-    if frame_features:
-        tampering_detection = 1.0 - np.mean([f.neural_texture_patterns for f in frame_features])
-    else:
-        tampering_detection = 0.5
-    
-    # Expert witness confidence
-    expert_confidence = (chain_of_custody + metadata_integrity + source_authenticity) / 3
-    
-    # Admissibility score
-    admissibility = (expert_confidence + forensic_hash + tampering_detection) / 3
-    
-    # Evidence quality rating
-    if admissibility >= 0.95:
-        quality_rating = "BEYOND REASONABLE DOUBT"
-        court_ready = True
-    elif admissibility >= 0.85:
-        quality_rating = "CLEAR AND CONVINCING"
-        court_ready = True
-    elif admissibility >= 0.75:
-        quality_rating = "PREPONDERANCE OF EVIDENCE"
-        court_ready = True
-    else:
-        quality_rating = "INSUFFICIENT EVIDENCE"
-        court_ready = False
-    
-    # Legal certainty level
-    if admissibility >= 0.90:
-        certainty_level = "HIGH CONFIDENCE"
-    elif admissibility >= 0.75:
-        certainty_level = "MODERATE CONFIDENCE"
-    else:
-        certainty_level = "LOW CONFIDENCE"
-    
-    return LegalGradeFeatures(
-        chain_of_custody_score=chain_of_custody,
-        forensic_hash_verification=forensic_hash,
-        metadata_integrity_score=metadata_integrity,
-        source_authenticity_score=source_authenticity,
-        tampering_detection_score=tampering_detection,
-        expert_witness_confidence=expert_confidence,
-        admissibility_score=admissibility,
-        evidence_quality_rating=quality_rating,
-        legal_certainty_level=certainty_level,
-        court_ready_analysis=court_ready
-    )
-
-def legal_grade_classification(features: AdvancedDetectionFeatures, 
-                             video_features: Optional[VideoAnalysisFeatures] = None,
-                             url_analysis: Dict = None) -> Tuple[bool, int, str, LegalGradeFeatures]:
-    """Legal-grade classification with court admissibility standards"""
-    
-    if url_analysis is None:
-        url_analysis = {'ai_probability': 0.5, 'source_confidence': 0.5}
-    
-    try:
-        # Enhanced weighted scoring for legal precision
-        weights = {
-            'pixel_noise_variance': -0.18,        
-            'frequency_domain_anomalies': 0.15,   
-            'edge_sharpness_consistency': 0.16,   
-            'compression_artifacts': 0.10,
-            'texture_analysis_score': -0.14,      
-            'color_histogram_anomalies': 0.12,
-            'gradient_consistency': 0.11,
-            'neural_texture_patterns': 0.17,      
-            'upsampling_artifacts': 0.13,
-            'attention_map_irregularities': 0.10,
-            'latent_space_signatures': 0.14,
-            'exif_consistency_score': -0.16,      
-            'timestamp_plausibility': -0.10,
-            'color_profile_analysis': 0.08,
-            'file_entropy_analysis': 0.07,
-            'statistical_significance': 0.12,     
-            'cross_validation_score': 0.10,
-            'reproducibility_index': 0.08
-        }
-        
-        # Calculate base AI score
-        ai_score = 0.0
-        feature_dict = features.__dict__
-        
-        for feature_name, weight in weights.items():
-            if feature_name in feature_dict and feature_dict[feature_name] is not None:
-                ai_score += feature_dict[feature_name] * weight
-        
-        # Add URL analysis with higher weight for legal cases
-        ai_score += url_analysis.get('ai_probability', 0.5) * 0.30
-        
-        # Video analysis integration
-        if video_features is not None:
-            video_score = (
-                video_features.deepfake_indicators * 0.25 +
-                video_features.facial_morphing_detection * 0.20 +
-                video_features.temporal_consistency_score * -0.15 +  # Negative: good consistency = human
-                video_features.frame_interpolation_artifacts * 0.18
-            )
-            ai_score += video_score * 0.35  # Video evidence weighs heavily
-        
-        # Apply sigmoid transformation with adjusted sensitivity for legal standards
-        ai_probability = 1 / (1 + np.exp(-ai_score * 6))  # More sensitive for legal precision
-        
-        # Legal-grade classification thresholds
-        if ai_probability >= 0.90:
-            is_ai = True
-            confidence = int(90 + ai_probability * 8)  # 90-98%
-            risk_level = "BEYOND REASONABLE DOUBT"
-        elif ai_probability >= 0.80:
-            is_ai = True
-            confidence = int(80 + ai_probability * 15)  # 80-95%
-            risk_level = "CLEAR AND CONVINCING"
-        elif ai_probability >= 0.65:
-            is_ai = True
-            confidence = int(65 + ai_probability * 20)  # 65-85%
-            risk_level = "PREPONDERANCE OF EVIDENCE"
-        elif ai_probability <= 0.15:
-            is_ai = False
-            confidence = int(85 + (1 - ai_probability) * 13)  # 85-98%
-            risk_level = "BEYOND REASONABLE DOUBT"
-        elif ai_probability <= 0.25:
-            is_ai = False
-            confidence = int(75 + (1 - ai_probability) * 20)  # 75-95%
-            risk_level = "CLEAR AND CONVINCING"
-        elif ai_probability <= 0.40:
-            is_ai = False
-            confidence = int(60 + (1 - ai_probability) * 25)  # 60-85%
-            risk_level = "PREPONDERANCE OF EVIDENCE"
-        else:
-            # Uncertain range - not suitable for legal proceedings
-            is_ai = ai_probability > 0.5
-            confidence = int(50 + abs(ai_probability - 0.5) * 30)
-            risk_level = "INSUFFICIENT EVIDENCE"
-        
-        # Generate legal-grade features
-        legal_features = generate_legal_grade_analysis(
-            video_features if video_features else VideoAnalysisFeatures(
-                temporal_consistency_score=0.5, motion_vector_anomalies=0.5,
-                frame_transition_artifacts=0.5, optical_flow_irregularities=0.5,
-                compression_pattern_analysis=0.5, facial_morphing_detection=0.5,
-                lip_sync_consistency=0.5, deepfake_indicators=0.5,
-                generation_timestamp_analysis=0.5, frame_interpolation_artifacts=0.5
-            ),
-            [features],
-            url_analysis.get('source_confidence', 0.5)
-        )
-        
-        return is_ai, min(98, confidence), risk_level, legal_features
-        
-    except Exception as e:
-        st.error(f"Error in legal-grade classification: {str(e)}")
-        # Return conservative default for legal safety
-        default_legal = LegalGradeFeatures(
-            chain_of_custody_score=0.5, forensic_hash_verification=0.5,
-            metadata_integrity_score=0.5, source_authenticity_score=0.5,
-            tampering_detection_score=0.5, expert_witness_confidence=0.5,
-            admissibility_score=0.5, evidence_quality_rating="INSUFFICIENT",
-            legal_certainty_level="INSUFFICIENT EVIDENCE", court_ready_analysis=False
-        )
-        return True, 50, "INSUFFICIENT EVIDENCE", default_legal
-
-def download_image_from_url(url: str) -> Optional[bytes]:
-    """Download image from URL with comprehensive error handling"""
-    try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-        response = requests.get(url, headers=headers, timeout=15, stream=True)
-        response.raise_for_status()
-        
-        # Check content type
-        content_type = response.headers.get('content-type', '').lower()
-        if not any(img_type in content_type for img_type in ['image/', 'jpeg', 'png', 'gif', 'webp', 'bmp']):
-            st.error("URL does not point to a valid image")
-            return None
-        
-        # Check file size
-        content_length = response.headers.get('content-length')
-        if content_length and int(content_length) > 50 * 1024 * 1024:  # 50MB limit
-            st.error("Image file too large (>50MB)")
-            return None
-            
-        return response.content
-        
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error downloading image: {str(e)}")
-        return None
-    except Exception as e:
-        st.error(f"Unexpected error: {str(e)}")
-        return None
-
-# Display Functions
-
-def display_video_analysis_results(is_ai: bool, confidence: int, risk_level: str, 
-                                 video_features: VideoAnalysisFeatures, 
-                                 legal_features: LegalGradeFeatures, 
-                                 source_url: str):
-    """Display comprehensive video analysis results"""
-    
-    # Main Verdict
-    verdict_class = "verdict-ai" if is_ai else "verdict-human"
-    verdict_text = "AI-GENERATED VIDEO" if is_ai else "HUMAN-CREATED VIDEO"
-    
-    st.markdown(f"<div class='{verdict_class}'>{verdict_text}</div>", unsafe_allow_html=True)
-    
-    # Confidence and Legal Assessment
-    confidence_class = "confidence-high" if confidence >= 85 else "confidence-medium" if confidence >= 65 else "confidence-low"
-    
-    st.markdown(
-        f"""
-        <div class='confidence-display'>
-            <div class='confidence-number {confidence_class}'>{confidence}%</div>
-            <h3>DETECTION CONFIDENCE</h3>
-            <p style='color: var(--text-300);'>
-                Legal Certainty Level: <strong>{risk_level}</strong><br>
-                Evidence Quality: <strong>{legal_features.evidence_quality_rating}</strong>
-            </p>
-            <div style='margin-top: 1.5rem; padding: 1.5rem; background: var(--bg-1100); border-radius: 12px; border-left: 4px solid var(--{"legal-gold" if legal_features.court_ready_analysis else "neon-red"});'>
-                <strong>Court Admissibility: {"READY" if legal_features.court_ready_analysis else "NOT READY"}</strong><br><br>
-                Admissibility Score: {legal_features.admissibility_score:.2f}/1.0<br>
-                Expert Witness Confidence: {legal_features.expert_witness_confidence:.2f}/1.0
-            </div>
-        </div>
-        """, 
-        unsafe_allow_html=True
-    )
-    
-    # Video-Specific Analysis
-    st.markdown("### Video Analysis Results")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown("**Deepfake Detection**")
-        deepfake_score = int(video_features.deepfake_indicators * 100)
-        st.metric("Deepfake Probability", f"{deepfake_score}%")
-        
-        facial_morph_score = int(video_features.facial_morphing_detection * 100)
-        st.metric("Facial Morphing", f"{facial_morph_score}%")
-        
-        lip_sync_score = int((1 - video_features.lip_sync_consistency) * 100)
-        st.metric("Lip-Sync Anomalies", f"{lip_sync_score}%")
-    
-    with col2:
-        st.markdown("**Temporal Analysis**")
-        temporal_score = int(video_features.temporal_consistency_score * 100)
-        st.metric("Temporal Consistency", f"{temporal_score}%")
-        
-        motion_anom_score = int(video_features.motion_vector_anomalies * 100)
-        st.metric("Motion Anomalies", f"{motion_anom_score}%")
-        
-        frame_interp_score = int(video_features.frame_interpolation_artifacts * 100)
-        st.metric("Frame Interpolation", f"{frame_interp_score}%")
-    
-    with col3:
-        st.markdown("**Technical Analysis**")
-        compression_score = int(video_features.compression_pattern_analysis * 100)
-        st.metric("Compression Anomalies", f"{compression_score}%")
-        
-        timestamp_score = int(video_features.generation_timestamp_analysis * 100)
-        st.metric("Timestamp Suspicion", f"{timestamp_score}%")
-    
-    # Legal-Grade Assessment
-    st.markdown("### Legal-Grade Assessment")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("**Evidence Quality Metrics**")
-        st.write(f"**Chain of Custody:** {legal_features.chain_of_custody_score:.3f}")
-        st.write(f"**Metadata Integrity:** {legal_features.metadata_integrity_score:.3f}")
-        st.write(f"**Source Authenticity:** {legal_features.source_authenticity_score:.3f}")
-        st.write(f"**Tampering Detection:** {legal_features.tampering_detection_score:.3f}")
-        
-    with col2:
-        st.markdown("**Statistical Analysis**")
-        st.write(f"**Expert Confidence:** {legal_features.expert_witness_confidence:.3f}")
-        st.write(f"**Admissibility Score:** {legal_features.admissibility_score:.3f}")
-        st.write(f"**Court Ready:** {'Yes' if legal_features.court_ready_analysis else 'No'}")
-        st.write(f"**Evidence Grade:** {legal_features.evidence_quality_rating}")
-
-def display_image_analysis_results(is_ai: bool, confidence: int, risk_level: str, 
-                                 features: AdvancedDetectionFeatures, 
-                                 legal_features: LegalGradeFeatures, 
-                                 source_url: str):
-    """Display comprehensive image analysis results"""
-    
-    # Main Verdict
-    verdict_class = "verdict-ai" if is_ai else "verdict-human"
-    verdict_text = "AI-GENERATED IMAGE" if is_ai else "HUMAN-CREATED IMAGE"
-    
-    st.markdown(f"<div class='{verdict_class}'>{verdict_text}</div>", unsafe_allow_html=True)
-    
-    # Confidence Display
-    confidence_class = "confidence-high" if confidence >= 85 else "confidence-medium" if confidence >= 65 else "confidence-low"
-    
-    st.markdown(
-        f"""
-        <div class='confidence-display'>
-            <div class='confidence-number {confidence_class}'>{confidence}%</div>
-            <h3>DETECTION CONFIDENCE</h3>
-            <p style='color: var(--text-300);'>
-                Legal Certainty: <strong>{risk_level}</strong><br>
-                Evidence Quality: <strong>{legal_features.evidence_quality_rating}</strong>
-            </p>
-        </div>
-        """, 
-        unsafe_allow_html=True
-    )
-    
-    # Enhanced Technical Analysis
-    st.markdown("### Enhanced Technical Analysis")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown("**Pixel Analysis**")
-        noise_score = int(features.pixel_noise_variance * 100)
-        st.metric("Noise Variance", f"{noise_score}%")
-        
-        freq_score = int(features.frequency_domain_anomalies * 100)
-        st.metric("Frequency Anomalies", f"{freq_score}%")
-        
-        edge_score = int(features.edge_sharpness_consistency * 100)
-        st.metric("Edge Consistency", f"{edge_score}%")
-    
-    with col2:
-        st.markdown("**Color Analysis**")
-        color_score = int(features.color_histogram_anomalies * 100)
-        st.metric("Color Anomalies", f"{color_score}%")
-        
-        texture_score = int(features.texture_analysis_score * 100)
-        st.metric("Texture Complexity", f"{texture_score}%")
-        
-        profile_score = int(features.color_profile_analysis * 100)
-        st.metric("Color Profile", f"{profile_score}%")
-    
-    with col3:
-        st.markdown("**AI Signatures**")
-        neural_score = int(features.neural_texture_patterns * 100)
-        st.metric("Neural Patterns", f"{neural_score}%")
-        
-        upsampling_score = int(features.upsampling_artifacts * 100)
-        st.metric("Upsampling Artifacts", f"{upsampling_score}%")
-        
-        latent_score = int(features.latent_space_signatures * 100)
-        st.metric("Latent Signatures", f"{latent_score}%")
-    
-    # Legal-Grade Statistics
-    st.markdown("### Legal-Grade Statistics")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("**Statistical Validation**")
-        st.write(f"**Statistical Significance:** {features.statistical_significance:.3f}")
-        st.write(f"**Cross-Validation Score:** {features.cross_validation_score:.3f}")
-        st.write(f"**Reproducibility Index:** {features.reproducibility_index:.3f}")
-        st.write(f"**False Positive Probability:** {features.false_positive_probability:.3f}")
-        
-    with col2:
-        st.markdown("**Legal Assessment**")
-        st.write(f"**Evidence Quality:** {legal_features.evidence_quality_rating}")
-        st.write(f"**Legal Certainty:** {legal_features.legal_certainty_level}")
-        st.write(f"**Admissibility Score:** {legal_features.admissibility_score:.3f}")
-        st.write(f"**Court Ready:** {'Yes' if legal_features.court_ready_analysis else 'No'}")
-
-def display_footer():
-    """Display enhanced legal-grade footer"""
-    st.markdown("---")
-    st.markdown(
-        """
-        <div style='text-align: center; color: var(--text-400); padding: 2rem;'>
-            <h3 style='color: var(--legal-gold); margin-bottom: 1rem;'>TRUTHLENS PRO LEGAL EDITION</h3>
-            <p><strong>Court-Admissible AI Detection System</strong></p>
-            <p>Advanced computer vision, statistical validation, and legal-grade evidence generation</p>
-            <p style='font-size: 0.9rem; margin-top: 1.5rem; color: var(--text-500);'>
-                <strong>DISCLAIMER:</strong> Results represent sophisticated probabilistic analysis using peer-reviewed techniques.<br>
-                For legal proceedings, consult with qualified experts and follow proper chain of custody procedures.<br>
-                This tool provides technical analysis to support, not replace, professional forensic examination.
-            </p>
-            <p style='font-size: 0.8rem; color: var(--text-600);'>
-                Detection algorithms based on published research in computer vision, digital forensics, and AI detection.<br>
-                Statistical methods follow accepted standards for scientific evidence in legal proceedings.
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-        #!/usr/bin/env python3
+        st.error("Please refresh the page and try again.")#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import hashlib
@@ -2969,3 +2561,414 @@ def extract_and_analyze_metadata(image_path: Union[str, bytes]) -> Dict[str, flo
         results['exif_consistency'] = 0.3
     
     return results
+
+# Legal Analysis Functions
+
+def generate_legal_grade_analysis(video_features: VideoAnalysisFeatures, 
+                                 frame_features: List[AdvancedDetectionFeatures], 
+                                 source_confidence: float) -> LegalGradeFeatures:
+    """Generate legal-grade analysis for court admissibility"""
+    
+    # Calculate chain of custody score
+    chain_of_custody = source_confidence * 0.8
+    
+    # Forensic hash verification (simplified)
+    forensic_hash = 0.9  # Would be calculated from actual hash verification
+    
+    # Metadata integrity
+    if frame_features:
+        metadata_integrity = np.mean([f.exif_consistency_score for f in frame_features])
+    else:
+        metadata_integrity = 0.5
+    
+    # Source authenticity
+    source_authenticity = source_confidence
+    
+    # Tampering detection
+    if frame_features:
+        tampering_detection = 1.0 - np.mean([f.neural_texture_patterns for f in frame_features])
+    else:
+        tampering_detection = 0.5
+    
+    # Expert witness confidence
+    expert_confidence = (chain_of_custody + metadata_integrity + source_authenticity) / 3
+    
+    # Admissibility score
+    admissibility = (expert_confidence + forensic_hash + tampering_detection) / 3
+    
+    # Evidence quality rating
+    if admissibility >= 0.95:
+        quality_rating = "BEYOND REASONABLE DOUBT"
+        court_ready = True
+    elif admissibility >= 0.85:
+        quality_rating = "CLEAR AND CONVINCING"
+        court_ready = True
+    elif admissibility >= 0.75:
+        quality_rating = "PREPONDERANCE OF EVIDENCE"
+        court_ready = True
+    else:
+        quality_rating = "INSUFFICIENT EVIDENCE"
+        court_ready = False
+    
+    # Legal certainty level
+    if admissibility >= 0.90:
+        certainty_level = "HIGH CONFIDENCE"
+    elif admissibility >= 0.75:
+        certainty_level = "MODERATE CONFIDENCE"
+    else:
+        certainty_level = "LOW CONFIDENCE"
+    
+    return LegalGradeFeatures(
+        chain_of_custody_score=chain_of_custody,
+        forensic_hash_verification=forensic_hash,
+        metadata_integrity_score=metadata_integrity,
+        source_authenticity_score=source_authenticity,
+        tampering_detection_score=tampering_detection,
+        expert_witness_confidence=expert_confidence,
+        admissibility_score=admissibility,
+        evidence_quality_rating=quality_rating,
+        legal_certainty_level=certainty_level,
+        court_ready_analysis=court_ready
+    )
+
+def legal_grade_classification(features: AdvancedDetectionFeatures, 
+                             video_features: Optional[VideoAnalysisFeatures] = None,
+                             url_analysis: Dict = None) -> Tuple[bool, int, str, LegalGradeFeatures]:
+    """Legal-grade classification with court admissibility standards"""
+    
+    if url_analysis is None:
+        url_analysis = {'ai_probability': 0.5, 'source_confidence': 0.5}
+    
+    try:
+        # Enhanced weighted scoring for legal precision
+        weights = {
+            'pixel_noise_variance': -0.18,        
+            'frequency_domain_anomalies': 0.15,   
+            'edge_sharpness_consistency': 0.16,   
+            'compression_artifacts': 0.10,
+            'texture_analysis_score': -0.14,      
+            'color_histogram_anomalies': 0.12,
+            'gradient_consistency': 0.11,
+            'neural_texture_patterns': 0.17,      
+            'upsampling_artifacts': 0.13,
+            'attention_map_irregularities': 0.10,
+            'latent_space_signatures': 0.14,
+            'exif_consistency_score': -0.16,      
+            'timestamp_plausibility': -0.10,
+            'color_profile_analysis': 0.08,
+            'file_entropy_analysis': 0.07,
+            'statistical_significance': 0.12,     
+            'cross_validation_score': 0.10,
+            'reproducibility_index': 0.08
+        }
+        
+        # Calculate base AI score
+        ai_score = 0.0
+        feature_dict = features.__dict__
+        
+        for feature_name, weight in weights.items():
+            if feature_name in feature_dict and feature_dict[feature_name] is not None:
+                ai_score += feature_dict[feature_name] * weight
+        
+        # Add URL analysis with higher weight for legal cases
+        ai_score += url_analysis.get('ai_probability', 0.5) * 0.30
+        
+        # Video analysis integration
+        if video_features is not None:
+            video_score = (
+                video_features.deepfake_indicators * 0.25 +
+                video_features.facial_morphing_detection * 0.20 +
+                video_features.temporal_consistency_score * -0.15 +  # Negative: good consistency = human
+                video_features.frame_interpolation_artifacts * 0.18
+            )
+            ai_score += video_score * 0.35  # Video evidence weighs heavily
+        
+        # Apply sigmoid transformation with adjusted sensitivity for legal standards
+        ai_probability = 1 / (1 + np.exp(-ai_score * 6))  # More sensitive for legal precision
+        
+        # Legal-grade classification thresholds
+        if ai_probability >= 0.90:
+            is_ai = True
+            confidence = int(90 + ai_probability * 8)  # 90-98%
+            risk_level = "BEYOND REASONABLE DOUBT"
+        elif ai_probability >= 0.80:
+            is_ai = True
+            confidence = int(80 + ai_probability * 15)  # 80-95%
+            risk_level = "CLEAR AND CONVINCING"
+        elif ai_probability >= 0.65:
+            is_ai = True
+            confidence = int(65 + ai_probability * 20)  # 65-85%
+            risk_level = "PREPONDERANCE OF EVIDENCE"
+        elif ai_probability <= 0.15:
+            is_ai = False
+            confidence = int(85 + (1 - ai_probability) * 13)  # 85-98%
+            risk_level = "BEYOND REASONABLE DOUBT"
+        elif ai_probability <= 0.25:
+            is_ai = False
+            confidence = int(75 + (1 - ai_probability) * 20)  # 75-95%
+            risk_level = "CLEAR AND CONVINCING"
+        elif ai_probability <= 0.40:
+            is_ai = False
+            confidence = int(60 + (1 - ai_probability) * 25)  # 60-85%
+            risk_level = "PREPONDERANCE OF EVIDENCE"
+        else:
+            # Uncertain range - not suitable for legal proceedings
+            is_ai = ai_probability > 0.5
+            confidence = int(50 + abs(ai_probability - 0.5) * 30)
+            risk_level = "INSUFFICIENT EVIDENCE"
+        
+        # Generate legal-grade features
+        legal_features = generate_legal_grade_analysis(
+            video_features if video_features else VideoAnalysisFeatures(
+                temporal_consistency_score=0.5, motion_vector_anomalies=0.5,
+                frame_transition_artifacts=0.5, optical_flow_irregularities=0.5,
+                compression_pattern_analysis=0.5, facial_morphing_detection=0.5,
+                lip_sync_consistency=0.5, deepfake_indicators=0.5,
+                generation_timestamp_analysis=0.5, frame_interpolation_artifacts=0.5
+            ),
+            [features],
+            url_analysis.get('source_confidence', 0.5)
+        )
+        
+        return is_ai, min(98, confidence), risk_level, legal_features
+        
+    except Exception as e:
+        st.error(f"Error in legal-grade classification: {str(e)}")
+        # Return conservative default for legal safety
+        default_legal = LegalGradeFeatures(
+            chain_of_custody_score=0.5, forensic_hash_verification=0.5,
+            metadata_integrity_score=0.5, source_authenticity_score=0.5,
+            tampering_detection_score=0.5, expert_witness_confidence=0.5,
+            admissibility_score=0.5, evidence_quality_rating="INSUFFICIENT",
+            legal_certainty_level="INSUFFICIENT EVIDENCE", court_ready_analysis=False
+        )
+        return True, 50, "INSUFFICIENT EVIDENCE", default_legal
+
+def download_image_from_url(url: str) -> Optional[bytes]:
+    """Download image from URL with comprehensive error handling"""
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, headers=headers, timeout=15, stream=True)
+        response.raise_for_status()
+        
+        # Check content type
+        content_type = response.headers.get('content-type', '').lower()
+        if not any(img_type in content_type for img_type in ['image/', 'jpeg', 'png', 'gif', 'webp', 'bmp']):
+            st.error("URL does not point to a valid image")
+            return None
+        
+        # Check file size
+        content_length = response.headers.get('content-length')
+        if content_length and int(content_length) > 50 * 1024 * 1024:  # 50MB limit
+            st.error("Image file too large (>50MB)")
+            return None
+            
+        return response.content
+        
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error downloading image: {str(e)}")
+        return None
+    except Exception as e:
+        st.error(f"Unexpected error: {str(e)}")
+        return None
+
+# Display Functions
+
+def display_video_analysis_results(is_ai: bool, confidence: int, risk_level: str, 
+                                 video_features: VideoAnalysisFeatures, 
+                                 legal_features: LegalGradeFeatures, 
+                                 source_url: str):
+    """Display comprehensive video analysis results"""
+    
+    # Main Verdict
+    verdict_class = "verdict-ai" if is_ai else "verdict-human"
+    verdict_text = "AI-GENERATED VIDEO" if is_ai else "HUMAN-CREATED VIDEO"
+    
+    st.markdown(f"<div class='{verdict_class}'>{verdict_text}</div>", unsafe_allow_html=True)
+    
+    # Confidence and Legal Assessment
+    confidence_class = "confidence-high" if confidence >= 85 else "confidence-medium" if confidence >= 65 else "confidence-low"
+    
+    st.markdown(
+        f"""
+        <div class='confidence-display'>
+            <div class='confidence-number {confidence_class}'>{confidence}%</div>
+            <h3>DETECTION CONFIDENCE</h3>
+            <p style='color: var(--text-300);'>
+                Legal Certainty Level: <strong>{risk_level}</strong><br>
+                Evidence Quality: <strong>{legal_features.evidence_quality_rating}</strong>
+            </p>
+            <div style='margin-top: 1.5rem; padding: 1.5rem; background: var(--bg-1100); border-radius: 12px; border-left: 4px solid var(--{"legal-gold" if legal_features.court_ready_analysis else "neon-red"});'>
+                <strong>Court Admissibility: {"READY" if legal_features.court_ready_analysis else "NOT READY"}</strong><br><br>
+                Admissibility Score: {legal_features.admissibility_score:.2f}/1.0<br>
+                Expert Witness Confidence: {legal_features.expert_witness_confidence:.2f}/1.0
+            </div>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
+    
+    # Video-Specific Analysis
+    st.markdown("### Video Analysis Results")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("**Deepfake Detection**")
+        deepfake_score = int(video_features.deepfake_indicators * 100)
+        st.metric("Deepfake Probability", f"{deepfake_score}%")
+        
+        facial_morph_score = int(video_features.facial_morphing_detection * 100)
+        st.metric("Facial Morphing", f"{facial_morph_score}%")
+        
+        lip_sync_score = int((1 - video_features.lip_sync_consistency) * 100)
+        st.metric("Lip-Sync Anomalies", f"{lip_sync_score}%")
+    
+    with col2:
+        st.markdown("**Temporal Analysis**")
+        temporal_score = int(video_features.temporal_consistency_score * 100)
+        st.metric("Temporal Consistency", f"{temporal_score}%")
+        
+        motion_anom_score = int(video_features.motion_vector_anomalies * 100)
+        st.metric("Motion Anomalies", f"{motion_anom_score}%")
+        
+        frame_interp_score = int(video_features.frame_interpolation_artifacts * 100)
+        st.metric("Frame Interpolation", f"{frame_interp_score}%")
+    
+    with col3:
+        st.markdown("**Technical Analysis**")
+        compression_score = int(video_features.compression_pattern_analysis * 100)
+        st.metric("Compression Anomalies", f"{compression_score}%")
+        
+        timestamp_score = int(video_features.generation_timestamp_analysis * 100)
+        st.metric("Timestamp Suspicion", f"{timestamp_score}%")
+    
+    # Legal-Grade Assessment
+    st.markdown("### Legal-Grade Assessment")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**Evidence Quality Metrics**")
+        st.write(f"**Chain of Custody:** {legal_features.chain_of_custody_score:.3f}")
+        st.write(f"**Metadata Integrity:** {legal_features.metadata_integrity_score:.3f}")
+        st.write(f"**Source Authenticity:** {legal_features.source_authenticity_score:.3f}")
+        st.write(f"**Tampering Detection:** {legal_features.tampering_detection_score:.3f}")
+        
+    with col2:
+        st.markdown("**Statistical Analysis**")
+        st.write(f"**Expert Confidence:** {legal_features.expert_witness_confidence:.3f}")
+        st.write(f"**Admissibility Score:** {legal_features.admissibility_score:.3f}")
+        st.write(f"**Court Ready:** {'Yes' if legal_features.court_ready_analysis else 'No'}")
+        st.write(f"**Evidence Grade:** {legal_features.evidence_quality_rating}")
+
+def display_image_analysis_results(is_ai: bool, confidence: int, risk_level: str, 
+                                 features: AdvancedDetectionFeatures, 
+                                 legal_features: LegalGradeFeatures, 
+                                 source_url: str):
+    """Display comprehensive image analysis results"""
+    
+    # Main Verdict
+    verdict_class = "verdict-ai" if is_ai else "verdict-human"
+    verdict_text = "AI-GENERATED IMAGE" if is_ai else "HUMAN-CREATED IMAGE"
+    
+    st.markdown(f"<div class='{verdict_class}'>{verdict_text}</div>", unsafe_allow_html=True)
+    
+    # Confidence Display
+    confidence_class = "confidence-high" if confidence >= 85 else "confidence-medium" if confidence >= 65 else "confidence-low"
+    
+    st.markdown(
+        f"""
+        <div class='confidence-display'>
+            <div class='confidence-number {confidence_class}'>{confidence}%</div>
+            <h3>DETECTION CONFIDENCE</h3>
+            <p style='color: var(--text-300);'>
+                Legal Certainty: <strong>{risk_level}</strong><br>
+                Evidence Quality: <strong>{legal_features.evidence_quality_rating}</strong>
+            </p>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
+    
+    # Enhanced Technical Analysis
+    st.markdown("### Enhanced Technical Analysis")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("**Pixel Analysis**")
+        noise_score = int(features.pixel_noise_variance * 100)
+        st.metric("Noise Variance", f"{noise_score}%")
+        
+        freq_score = int(features.frequency_domain_anomalies * 100)
+        st.metric("Frequency Anomalies", f"{freq_score}%")
+        
+        edge_score = int(features.edge_sharpness_consistency * 100)
+        st.metric("Edge Consistency", f"{edge_score}%")
+    
+    with col2:
+        st.markdown("**Color Analysis**")
+        color_score = int(features.color_histogram_anomalies * 100)
+        st.metric("Color Anomalies", f"{color_score}%")
+        
+        texture_score = int(features.texture_analysis_score * 100)
+        st.metric("Texture Complexity", f"{texture_score}%")
+        
+        profile_score = int(features.color_profile_analysis * 100)
+        st.metric("Color Profile", f"{profile_score}%")
+    
+    with col3:
+        st.markdown("**AI Signatures**")
+        neural_score = int(features.neural_texture_patterns * 100)
+        st.metric("Neural Patterns", f"{neural_score}%")
+        
+        upsampling_score = int(features.upsampling_artifacts * 100)
+        st.metric("Upsampling Artifacts", f"{upsampling_score}%")
+        
+        latent_score = int(features.latent_space_signatures * 100)
+        st.metric("Latent Signatures", f"{latent_score}%")
+    
+    # Legal-Grade Statistics
+    st.markdown("### Legal-Grade Statistics")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**Statistical Validation**")
+        st.write(f"**Statistical Significance:** {features.statistical_significance:.3f}")
+        st.write(f"**Cross-Validation Score:** {features.cross_validation_score:.3f}")
+        st.write(f"**Reproducibility Index:** {features.reproducibility_index:.3f}")
+        st.write(f"**False Positive Probability:** {features.false_positive_probability:.3f}")
+        
+    with col2:
+        st.markdown("**Legal Assessment**")
+        st.write(f"**Evidence Quality:** {legal_features.evidence_quality_rating}")
+        st.write(f"**Legal Certainty:** {legal_features.legal_certainty_level}")
+        st.write(f"**Admissibility Score:** {legal_features.admissibility_score:.3f}")
+        st.write(f"**Court Ready:** {'Yes' if legal_features.court_ready_analysis else 'No'}")
+
+def display_footer():
+    """Display enhanced legal-grade footer"""
+    st.markdown("---")
+    st.markdown(
+        """
+        <div style='text-align: center; color: var(--text-400); padding: 2rem;'>
+            <h3 style='color: var(--legal-gold); margin-bottom: 1rem;'>TRUTHLENS PRO LEGAL EDITION</h3>
+            <p><strong>Court-Admissible AI Detection System</strong></p>
+            <p>Advanced computer vision, statistical validation, and legal-grade evidence generation</p>
+            <p style='font-size: 0.9rem; margin-top: 1.5rem; color: var(--text-500);'>
+                <strong>DISCLAIMER:</strong> Results represent sophisticated probabilistic analysis using peer-reviewed techniques.<br>
+                For legal proceedings, consult with qualified experts and follow proper chain of custody procedures.<br>
+                This tool provides technical analysis to support, not replace, professional forensic examination.
+            </p>
+            <p style='font-size: 0.8rem; color: var(--text-600);'>
+                Detection algorithms based on published research in computer vision, digital forensics, and AI detection.<br>
+                Statistical methods follow accepted standards for scientific evidence in legal proceedings.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
