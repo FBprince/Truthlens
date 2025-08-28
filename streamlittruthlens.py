@@ -994,8 +994,24 @@
 
 
 
-unsafe_allow_html=True
-    )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Main Application
 
@@ -1357,9 +1373,61 @@ def main():
                         progress_bar.empty()
                         status_text.empty()
                         
-                        st.success("VIDEO ANALYSIS COMPLETE - Legal    return results
+                        st.success("VIDEO ANALYSIS COMPLETE - Legal-Grade Assessment")
+                        
+                        # Display results
+                        display_video_analysis_results(is_ai, confidence, risk_level, video_features, legal_features, source_url)
+                        
+                else:
+                    # Image Analysis Pipeline
+                    with st.spinner("Performing advanced image analysis..."):
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
+                        
+                        status_text.text("Analyzing pixel patterns...")
+                        progress_bar.progress(20)
+                        
+                        status_text.text("Processing frequency domain...")
+                        progress_bar.progress(40)
+                        
+                        status_text.text("Extracting metadata...")
+                        progress_bar.progress(60)
+                        
+                        status_text.text("Detecting AI signatures...")
+                        progress_bar.progress(80)
+                        
+                        status_text.text("Generating legal assessment...")
+                        progress_bar.progress(90)
+                        
+                        # Perform comprehensive analysis
+                        features = comprehensive_ai_detection(source_data, source_url)
+                        url_analysis = analyze_url_patterns(source_url)
+                        is_ai, confidence, risk_level, legal_features = legal_grade_classification(
+                            features, None, url_analysis
+                        )
+                        
+                        progress_bar.progress(100)
+                        time.sleep(0.5)
+                        progress_bar.empty()
+                        status_text.empty()
+                        
+                        st.success("IMAGE ANALYSIS COMPLETE - Legal-Grade Assessment")
+                        
+                        # Display results
+                        display_image_analysis_results(is_ai, confidence, risk_level, features, legal_features, source_url)
+                        
+            except Exception as e:
+                st.error(f"Analysis failed: {str(e)}")
+                st.error("Please try again with a different file or URL.")
 
-# Legal Analysis Functions
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # Display footer
+    display_footer()
+
+
+if __name__ == "__main__":
+    main()# Legal Analysis Functions
 
 def generate_legal_grade_analysis(video_features: VideoAnalysisFeatures, 
                                  frame_features: List[AdvancedDetectionFeatures], 
@@ -1792,7 +1860,6 @@ import warnings
 import tempfile
 import subprocess
 from datetime import datetime, timezone
-import yt_dlp
 import imageio
 from scipy.fft import fft2, fftshift
 from scipy.spatial.distance import cosine
@@ -2508,274 +2575,6 @@ def extract_and_analyze_metadata(image_path: Union[str, bytes]) -> Dict[str, flo
         results['exif_consistency'] = 0.3
     
     return results
-
-# Video Analysis Functions
-
-def download_video_from_url(url: str) -> Optional[str]:
-    """Enhanced video downloader supporting all major platforms"""
-    try:
-        # Configure yt-dlp for maximum compatibility
-        ydl_opts = {
-            'format': 'best[height<=720]',  # Limit to 720p for processing efficiency
-            'outtmpl': tempfile.mktemp(suffix='.%(ext)s'),
-            'quiet': True,
-            'no_warnings': True,
-            'extractaudio': False,
-            'writeinfojson': True,
-        }
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Extract info first
-            info = ydl.extract_info(url, download=False)
-            
-            # Check if it's a live stream (not downloadable)
-            if info.get('is_live', False):
-                st.error("Live streams cannot be analyzed")
-                return None
-            
-            # Download the video
-            ydl.download([url])
-            
-            # Find the downloaded file
-            filename_template = ydl_opts['outtmpl']
-            # Replace template with actual values
-            filename = filename_template.replace('%(ext)s', info.get('ext', 'mp4'))
-            
-            if os.path.exists(filename):
-                return filename
-            else:
-                # Try common extensions if exact match fails
-                for ext in ['mp4', 'webm', 'mkv', 'avi']:
-                    test_filename = filename_template.replace('%(ext)s', ext)
-                    if os.path.exists(test_filename):
-                        return test_filename
-                
-                st.error("Downloaded file not found")
-                return None
-                
-    except yt_dlp.utils.DownloadError as e:
-        st.error(f"Download failed: {str(e)}")
-        return None
-    except Exception as e:
-        st.error(f"Unexpected error downloading video: {str(e)}")
-        return None
-
-def extract_video_frames(video_path: str, max_frames: int = 30) -> List[np.ndarray]:
-    """Extract frames from video for analysis"""
-    try:
-        cap = cv2.VideoCapture(video_path)
-        
-        if not cap.isOpened():
-            st.error("Could not open video file")
-            return []
-        
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        duration = total_frames / fps if fps > 0 else 0
-        
-        # Calculate frame sampling interval
-        if total_frames <= max_frames:
-            frame_interval = 1
-        else:
-            frame_interval = total_frames // max_frames
-        
-        frames = []
-        frame_count = 0
-        
-        while len(frames) < max_frames and cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
-                
-            if frame_count % frame_interval == 0:
-                # Convert BGR to RGB
-                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                frames.append(rgb_frame)
-            
-            frame_count += 1
-        
-        cap.release()
-        
-        st.info(f"Extracted {len(frames)} frames from video ({duration:.1f}s, {fps:.1f} FPS)")
-        return frames
-        
-    except Exception as e:
-        st.error(f"Error extracting frames: {str(e)}")
-        return []
-
-def analyze_temporal_consistency(frames: List[np.ndarray]) -> Dict[str, float]:
-    """Analyze temporal consistency between frames"""
-    if len(frames) < 2:
-        return {'temporal_consistency': 0.5, 'motion_smoothness': 0.5}
-    
-    try:
-        consistency_scores = []
-        motion_scores = []
-        
-        for i in range(1, len(frames)):
-            prev_frame = cv2.cvtColor(frames[i-1], cv2.COLOR_RGB2GRAY)
-            curr_frame = cv2.cvtColor(frames[i], cv2.COLOR_RGB2GRAY)
-            
-            # Calculate optical flow
-            flow = cv2.calcOpticalFlowPyrLK(
-                prev_frame, curr_frame, 
-                np.random.randint(0, min(prev_frame.shape), (100, 1, 2)).astype(np.float32),
-                None
-            )[0]
-            
-            if flow is not None and len(flow) > 0:
-                # Calculate motion consistency
-                motion_magnitude = np.linalg.norm(flow.reshape(-1, 2), axis=1)
-                motion_consistency = 1.0 - np.std(motion_magnitude) / (np.mean(motion_magnitude) + 1e-6)
-                motion_scores.append(max(0, min(1, motion_consistency)))
-            
-            # Frame difference analysis
-            frame_diff = cv2.absdiff(prev_frame, curr_frame)
-            diff_mean = np.mean(frame_diff)
-            diff_std = np.std(frame_diff)
-            
-            # AI-generated videos often have unnatural temporal transitions
-            consistency_score = 1.0 - min(1.0, diff_std / (diff_mean + 1e-6))
-            consistency_scores.append(max(0, consistency_score))
-        
-        avg_consistency = np.mean(consistency_scores) if consistency_scores else 0.5
-        avg_motion_smoothness = np.mean(motion_scores) if motion_scores else 0.5
-        
-        return {
-            'temporal_consistency': avg_consistency,
-            'motion_smoothness': avg_motion_smoothness,
-            'frame_transition_score': (avg_consistency + avg_motion_smoothness) / 2
-        }
-        
-    except Exception as e:
-        st.error(f"Error in temporal analysis: {str(e)}")
-        return {'temporal_consistency': 0.5, 'motion_smoothness': 0.5, 'frame_transition_score': 0.5}
-
-def detect_deepfake_indicators(frames: List[np.ndarray]) -> Dict[str, float]:
-    """Detect deepfake-specific indicators in video frames"""
-    if not frames:
-        return {'deepfake_probability': 0.5}
-    
-    try:
-        deepfake_scores = []
-        face_consistency_scores = []
-        
-        # Initialize face detector
-        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-        
-        previous_face_features = None
-        
-        for frame in frames:
-            gray_frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-            
-            # Detect faces
-            faces = face_cascade.detectMultiScale(gray_frame, 1.1, 4)
-            
-            if len(faces) > 0:
-                # Analyze the largest face
-                face = max(faces, key=lambda x: x[2] * x[3])
-                x, y, w, h = face
-                
-                face_region = gray_frame[y:y+h, x:x+w]
-                
-                if face_region.size > 0:
-                    # Extract features for consistency analysis
-                    try:
-                        # Calculate Local Binary Pattern for face texture
-                        lbp = feature.local_binary_pattern(face_region, 8, 1, method='uniform')
-                        face_texture_features = np.histogram(lbp.ravel(), bins=10)[0]
-                        face_texture_features = face_texture_features / (np.sum(face_texture_features) + 1e-6)
-                        
-                        # Check consistency with previous frame
-                        if previous_face_features is not None:
-                            similarity = 1.0 - cosine(face_texture_features, previous_face_features)
-                            face_consistency_scores.append(max(0, min(1, similarity)))
-                        
-                        previous_face_features = face_texture_features
-                        
-                        # Analyze face region for artifacts
-                        # Check for unnatural smoothness (common in deepfakes)
-                        face_variance = np.var(face_region.astype(float))
-                        smoothness_score = 1.0 - min(1.0, face_variance / 1000.0)
-                        
-                        # Check for edge artifacts around face boundary
-                        face_edges = cv2.Canny(face_region, 50, 150)
-                        edge_density = np.sum(face_edges > 0) / face_edges.size
-                        edge_artifact_score = abs(edge_density - 0.1) * 10  # Unnatural if too high or too low
-                        
-                        # Combine scores
-                        frame_deepfake_score = (smoothness_score + min(1.0, edge_artifact_score)) / 2
-                        deepfake_scores.append(frame_deepfake_score)
-                        
-                    except Exception as e:
-                        continue
-        
-        # Calculate final deepfake probability
-        avg_deepfake_score = np.mean(deepfake_scores) if deepfake_scores else 0.5
-        avg_face_consistency = np.mean(face_consistency_scores) if face_consistency_scores else 0.5
-        
-        # Inconsistent faces or high artifact scores suggest deepfake
-        deepfake_probability = (avg_deepfake_score + (1.0 - avg_face_consistency)) / 2
-        
-        return {
-            'deepfake_probability': deepfake_probability,
-            'face_consistency_score': avg_face_consistency,
-            'artifact_detection_score': avg_deepfake_score,
-            'faces_detected': len(deepfake_scores)
-        }
-        
-    except Exception as e:
-        st.error(f"Error in deepfake detection: {str(e)}")
-        return {'deepfake_probability': 0.5}
-
-def comprehensive_video_analysis(video_path: str, source_url: str = "") -> Tuple[VideoAnalysisFeatures, List[AdvancedDetectionFeatures]]:
-    """Comprehensive video analysis combining frame and temporal analysis"""
-    
-    # Extract frames for analysis
-    frames = extract_video_frames(video_path, max_frames=20)
-    
-    if not frames:
-        # Return default values if frame extraction fails
-        default_video_features = VideoAnalysisFeatures(
-            temporal_consistency_score=0.5, motion_vector_anomalies=0.5,
-            frame_transition_artifacts=0.5, optical_flow_irregularities=0.5,
-            compression_pattern_analysis=0.5, facial_morphing_detection=0.5,
-            lip_sync_consistency=0.5, deepfake_indicators=0.5,
-            generation_timestamp_analysis=0.5, frame_interpolation_artifacts=0.5
-        )
-        return default_video_features, []
-    
-    # Analyze individual frames
-    frame_analyses = []
-    for i, frame in enumerate(frames[:10]):  # Limit to 10 frames for performance
-        try:
-            frame_analysis = comprehensive_ai_detection(frame, source_url)
-            frame_analyses.append(frame_analysis)
-        except Exception as e:
-            st.warning(f"Frame {i} analysis failed: {str(e)}")
-            continue
-    
-    # Temporal analysis
-    temporal_analysis = analyze_temporal_consistency(frames)
-    
-    # Deepfake detection
-    deepfake_analysis = detect_deepfake_indicators(frames)
-    
-    # Combine analyses into VideoAnalysisFeatures
-    video_features = VideoAnalysisFeatures(
-        temporal_consistency_score=temporal_analysis.get('temporal_consistency', 0.5),
-        motion_vector_anomalies=1.0 - temporal_analysis.get('motion_smoothness', 0.5),
-        frame_transition_artifacts=1.0 - temporal_analysis.get('frame_transition_score', 0.5),
-        optical_flow_irregularities=deepfake_analysis.get('deepfake_probability', 0.5),
-        compression_pattern_analysis=0.5,  # Simplified for this implementation
-        facial_morphing_detection=deepfake_analysis.get('artifact_detection_score', 0.5),
-        lip_sync_consistency=deepfake_analysis.get('face_consistency_score', 0.5),
-        deepfake_indicators=deepfake_analysis.get('deepfake_probability', 0.5),
-        generation_timestamp_analysis=0.5,  # Simplified for this implementation
-        frame_interpolation_artifacts=1.0 - temporal_analysis.get('motion_smoothness', 0.5)
-    )
-    
-    return video_features, frame_analyses
 
 def analyze_color_characteristics(img_array: np.ndarray) -> Dict[str, float]:
     """Enhanced color analysis for AI-generated content detection"""
