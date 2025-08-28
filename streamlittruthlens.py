@@ -1893,4 +1893,5 @@ def comprehensive_ai_detection(image_data: Union[bytes, np.ndarray], source_url:
             upsampling_artifacts=0.5, attention_map_irregularities=0.5, latent_space_signatures=0.5,
             exif_consistency_score=0.5, timestamp_plausibility=0.5, color_profile_analysis=0.5,
             file_entropy_analysis=0.5, statistical_significance=0.5, cross_validation_score=0.5,
-            reproducibility_index=0.5, false_positive_probability=0.5
+            reproducibility_index=0.5, false_positive_probability=0.5)
+
